@@ -3,10 +3,10 @@ from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.orm import Session
-
+from app.review_service import run_review_for_pr
 from app.database import get_db
 from app.ingestion import ingest_repo
-from app.models import Repo
+from app.models import Finding, PullRequest, Repo
 from app.retrieval import search_code
 from app.webhooks import router as webhooks_router
 
@@ -88,4 +88,54 @@ def search_repo(
     return {
         "query": q,
         "results": results,
+    }
+
+@app.post("/reviews/run/{pr_id}")
+async def trigger_review(
+    pr_id: int,
+    db: Session = Depends(get_db),
+):
+    pr = (
+        db.query(PullRequest)
+        .filter(PullRequest.id == pr_id)
+        .first()
+    )
+
+    if pr is None:
+        raise HTTPException(
+            status_code=404,
+            detail="PR not found",
+        )
+
+    review = await run_review_for_pr(
+        db,
+        pr,
+    )
+
+    findings = (
+        db.query(Finding)
+        .filter(Finding.review_id == review.id)
+        .all()
+    )
+
+    return {
+        "review_id": review.id,
+        "summary": review.summary,
+        "tokens_used": review.tokens_used,
+        "turns_taken": review.turns_taken,
+        "findings_count": len(findings),
+        "findings": [
+            {
+                "file": finding.file,
+                "lines": (
+                    f"{finding.line_start}-"
+                    f"{finding.line_end}"
+                ),
+                "category": finding.category,
+                "severity": finding.severity,
+                "explanation": finding.explanation,
+                "confidence": finding.confidence,
+            }
+            for finding in findings
+        ],
     }
