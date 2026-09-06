@@ -1,26 +1,13 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
+:root { --background:#f7f8fa; --foreground:#171923; --line:#e6e8ef; --muted:#6d7280; --accent:#5b5ce2; }
+@theme inline { --color-background:var(--background); --color-foreground:var(--foreground); --font-sans:var(--font-geist-sans); --font-mono:var(--font-geist-mono); }
+* { border-color:var(--line); }
+html { background:var(--background); }
+body { min-width:320px; background:radial-gradient(950px 450px at 80% -12%,rgba(99,102,241,.12),transparent 62%),radial-gradient(700px 380px at -8% 25%,rgba(125,211,252,.13),transparent 64%),var(--background); color:var(--foreground); font-family:Arial,Helvetica,sans-serif; }
+body::before { content:""; position:fixed; z-index:-1; inset:0; pointer-events:none; opacity:.32; background-image:linear-gradient(rgba(62,70,90,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(62,70,90,.025) 1px,transparent 1px); background-size:56px 56px; mask-image:linear-gradient(to bottom,black,transparent 65%); }
+::selection { background:#c7d2fe; color:#1e1b4b; }
+.surface { background:rgba(255,255,255,.88); border:1px solid rgba(220,223,232,.85); box-shadow:0 1px 2px rgba(16,24,40,.02),0 10px 30px rgba(25,35,60,.045); }
+.page-enter { animation:page-enter .42s ease-out both; }.float-in { animation:float-in .42s ease-out both; }.float-in:nth-child(2){animation-delay:55ms}.float-in:nth-child(3){animation-delay:110ms}.float-in:nth-child(4){animation-delay:165ms}
+@keyframes page-enter { from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)} } @keyframes float-in { from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)} }
+@media (prefers-reduced-motion:reduce) { *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important} }

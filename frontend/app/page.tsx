@@ -1,51 +1,5 @@
 import Link from "next/link";
 import { getRepos } from "@/lib/api";
+import { Icon, MetricCard, SectionTitle } from "@/components/ui";
 
-export default async function HomePage() {
-  const repos = await getRepos();
-
-  return (
-    <main className="max-w-3xl mx-auto py-12 px-4">
-      <h1 className="text-2xl font-bold mb-6">
-        PR Sentinel
-      </h1>
-
-      <p className="text-gray-500 mb-8">
-        Connected repositories and their review activity.
-      </p>
-
-      {repos.length === 0 && (
-        <p className="text-gray-400">
-          No repos connected yet. Install the GitHub App on a
-          repo to get started.
-        </p>
-      )}
-
-      <ul className="space-y-3">
-        {repos.map((repo) => (
-          <li key={repo.id}>
-            <Link
-              href={`/repos/${repo.id}`}
-              className="block rounded-lg border border-gray-200 p-4 hover:border-gray-400 transition-colors"
-            >
-              <div className="flex justify-between items-center">
-                <span className="font-medium">
-                  {repo.full_name}
-                </span>
-
-                <span className="text-sm text-gray-500">
-                  {repo.review_count} review(s)
-                </span>
-              </div>
-
-              <div className="text-xs text-gray-400 mt-1">
-                Last indexed:{" "}
-                {repo.last_indexed_at ?? "never"}
-              </div>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </main>
-  );
-}
+export default async function HomePage(){const repos=await getRepos();const reviews=repos.reduce((sum,repo)=>sum+repo.review_count,0);const indexed=repos.filter(repo=>repo.last_indexed_at).length;return <main className="page-enter mx-auto max-w-7xl px-5 pb-16 pt-12 sm:px-8 sm:pt-20"><section className="relative overflow-hidden rounded-3xl border border-indigo-100 bg-white px-7 py-11 shadow-[0_18px_50px_rgba(53,64,110,.08)] sm:px-12 sm:py-16"><div className="absolute -right-20 -top-24 size-80 rounded-full bg-indigo-100/60 blur-3xl"/><div className="relative max-w-3xl"><div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700"><span className="size-1.5 rounded-full bg-emerald-500"/>AI Review Engine Online</div><p className="mb-3 text-sm font-semibold text-indigo-600">PR Sentinel</p><h1 className="text-4xl font-semibold tracking-[-.06em] text-slate-950 sm:text-6xl">AI-powered Pull Request Intelligence</h1><p className="mt-6 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">Review GitHub pull requests with intelligent code analysis, actionable findings, and transparent AI reasoning.</p></div></section><section className="mt-14"><SectionTitle eyebrow="Workspace overview" title="Review activity"/><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><MetricCard label="Repositories" value={repos.length} icon="folder" detail="Connected to Sentinel"/><MetricCard label="AI Reviews" value={reviews} icon="spark" detail="Generated review reports"/><MetricCard label="Indexed" value={indexed} icon="scan" detail="Repositories ready to review"/><MetricCard label="Review engine" value={repos.length?"Online":"—"} icon="pulse" detail={repos.length?"Monitoring is active":"Connect a repository"}/></div></section><section id="repositories" className="mt-16 scroll-mt-24"><SectionTitle eyebrow="Connected GitHub" title="Your repositories"><span className="text-sm text-slate-500">{repos.length} total</span></SectionTitle>{repos.length===0?<div className="surface rounded-2xl px-6 py-14 text-center"><Icon name="folder" className="mx-auto mb-4 text-slate-400"/><p className="text-base font-medium text-slate-700">No repositories connected yet.</p><p className="mt-2 text-sm text-slate-500">Install the GitHub App on a repository to get started.</p></div>:<ul className="grid gap-4 md:grid-cols-2">{repos.map(repo=><li key={repo.id}><Link href={`/repos/${repo.id}`} className="surface group block rounded-2xl p-6 transition duration-300 hover:-translate-y-1 hover:border-indigo-200 hover:shadow-[0_18px_38px_rgba(61,70,120,.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"><div className="flex items-start justify-between"><span className="grid size-11 place-items-center rounded-xl bg-slate-100 text-slate-600"><Icon name="folder"/></span><Icon name="arrow" className="mt-1 text-slate-400 transition duration-300 group-hover:translate-x-1 group-hover:text-indigo-600"/></div><div className="mt-7"><p className="truncate text-base font-semibold tracking-[-.025em] text-slate-900">{repo.full_name}</p><p className="mt-1.5 text-sm text-slate-500">{repo.review_count} {repo.review_count===1?"AI review":"AI reviews"}</p></div><div className="mt-6 flex items-center gap-2 border-t border-slate-100 pt-4 text-sm text-slate-500"><span className={`size-2 rounded-full ${repo.last_indexed_at?"bg-emerald-500":"bg-slate-300"}`}/>{repo.last_indexed_at?"Indexed and ready":"Awaiting first index"}</div></Link></li>)}</ul>}</section></main>;}

@@ -1,92 +1,17 @@
 import Link from "next/link";
 import { getRepoPulls } from "@/lib/api";
+import { Icon, SectionTitle, StatusBadge } from "@/components/ui";
 
-const statusColor: Record<string, string> = {
-  posted: "bg-green-100 text-green-700",
-  completed: "bg-blue-100 text-blue-700",
-  post_failed: "bg-red-100 text-red-700",
-  pending: "bg-gray-100 text-gray-600",
-};
-
-export default async function RepoPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function RepoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const repoId = Number(id);
-
-  const { repo, pulls } = await getRepoPulls(repoId);
-
-  return (
-    <main className="max-w-3xl mx-auto py-12 px-4">
-      <Link
-        href="/"
-        className="text-sm text-gray-500 hover:underline"
-      >
-        &larr; All repos
-      </Link>
-
-      <h1 className="text-2xl font-bold mt-2 mb-6">
-        {repo.full_name}
-      </h1>
-
-      {pulls.length === 0 ? (
-        <p className="text-gray-400">
-          No pull requests found.
-        </p>
-      ) : (
-        <ul className="space-y-3">
-          {pulls.map((pr) => (
-            <li
-              key={pr.id}
-              className="rounded-lg border border-gray-200 p-4"
-            >
-              <div className="flex justify-between items-start">
-                <div>
-                  <div className="font-medium">
-                    #{pr.github_pr_number} {pr.title}
-                  </div>
-
-                  <div className="text-xs text-gray-400">
-                    by {pr.author}
-                  </div>
-                </div>
-
-                {pr.latest_review && (
-                  <span
-                    className={`text-xs px-2 py-1 rounded-full ${
-                      statusColor[pr.latest_review.status] ??
-                      "bg-gray-100 text-gray-600"
-                    }`}
-                  >
-                    {pr.latest_review.status}
-                  </span>
-                )}
-              </div>
-
-              {pr.latest_review ? (
-                <div className="mt-3">
-                  <p className="text-sm text-gray-600">
-                    {pr.latest_review.summary}
-                  </p>
-
-                  <Link
-                    href={`/reviews/${pr.latest_review.id}`}
-                    className="text-sm text-blue-600 hover:underline mt-2 inline-block"
-                  >
-                    View findings &amp; trace &rarr;
-                  </Link>
-                </div>
-              ) : (
-                <p className="text-sm text-gray-400 mt-2">
-                  No review yet.
-                </p>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </main>
-  );
+  const { repo, pulls } = await getRepoPulls(Number(id));
+  const reviewed = pulls.filter((pr) => pr.latest_review).length;
+  const coverage = pulls.length ? `${Math.round((reviewed / pulls.length) * 100)}%` : "—";
+  return <main className="page-enter mx-auto max-w-6xl px-5 pb-16 pt-10 sm:px-8 sm:pt-14">
+    <Link href="/" className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 transition hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">← All repositories</Link>
+    <section className="mt-7 flex flex-col justify-between gap-6 sm:flex-row sm:items-end"><div className="flex gap-4"><span className="grid size-12 place-items-center rounded-2xl bg-indigo-600 text-white shadow-sm shadow-indigo-200"><Icon name="folder" /></span><div><p className="mb-2 text-xs font-semibold text-indigo-600">REPOSITORY</p><h1 className="text-3xl font-semibold tracking-[-.05em] text-slate-950 sm:text-4xl">{repo.full_name}</h1></div></div><span className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700"><span className="size-1.5 rounded-full bg-emerald-500" />Monitoring active</span></section>
+    <section className="mt-10 grid gap-4 sm:grid-cols-3"><Stat label="Pull Requests" value={pulls.length} /><Stat label="Reviews" value={reviewed} /><Stat label="Review coverage" value={coverage} /></section>
+    <section className="mt-16"><SectionTitle eyebrow="GitHub activity" title="Pull requests" />{pulls.length === 0 ? <div className="surface rounded-2xl px-6 py-14 text-center text-sm text-slate-500">No pull requests found.</div> : <ul className="space-y-3">{pulls.map((pr) => <li key={pr.id} className="surface rounded-2xl p-5 transition duration-300 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-[0_12px_28px_rgba(61,70,120,.08)]"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><h2 className="truncate text-base font-semibold tracking-[-.02em] text-slate-900">#{pr.github_pr_number} {pr.title}</h2><p className="mt-2 flex items-center gap-2 text-sm text-slate-500"><Icon name="branch" className="size-4" />{pr.author} · {pr.status}</p></div>{pr.latest_review && <StatusBadge status={pr.latest_review.status} />}</div>{pr.latest_review ? <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between"><p className="line-clamp-2 max-w-3xl text-sm leading-6 text-slate-600">{pr.latest_review.summary}</p><Link href={`/reviews/${pr.latest_review.id}`} className="inline-flex shrink-0 items-center gap-2 text-sm font-semibold text-indigo-600 transition hover:text-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">View review <Icon name="arrow" className="size-4" /></Link></div> : <p className="mt-4 border-t border-slate-100 pt-4 text-sm text-slate-500">No review yet.</p>}</li>)}</ul>}</section>
+  </main>;
 }
+function Stat({ label, value }: { label: string; value: string | number }) { return <div className="surface rounded-2xl p-5"><p className="text-sm text-slate-500">{label}</p><p className="mt-3 text-3xl font-semibold tracking-[-.05em] text-slate-900">{value}</p></div>; }
