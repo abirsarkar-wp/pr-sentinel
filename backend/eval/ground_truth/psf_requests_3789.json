@@ -1,0 +1,107 @@
+{
+  "repo": "psf/requests",
+  "pr_number": 3789,
+  "title": "3780: Lazy load idna library",
+  "body": "Changes based on comment from previous Pull Request: https://github.com/kennethreitz/requests/pull/3787\r\n\r\nFix for issue: https://github.com/kennethreitz/requests/issues/3780\r\n",
+  "head_sha": "fae3f92c34d8d7267de33ecb676b3d5600146257",
+  "files": [
+    {
+      "sha": "cc9e75f3bda4297aec56ab5806b461742500b2b9",
+      "filename": "AUTHORS.rst",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 0,
+      "changes": 1,
+      "blob_url": "https://github.com/psf/requests/blob/fae3f92c34d8d7267de33ecb676b3d5600146257/AUTHORS.rst",
+      "raw_url": "https://github.com/psf/requests/raw/fae3f92c34d8d7267de33ecb676b3d5600146257/AUTHORS.rst",
+      "contents_url": "https://api.github.com/repos/psf/requests/contents/AUTHORS.rst?ref=fae3f92c34d8d7267de33ecb676b3d5600146257",
+      "patch": "@@ -175,3 +175,4 @@ Patches and Suggestions\n - Hussain Tamboli <hussaintamboli18@gmail.com> (`@hussaintamboli <https://github.com/hussaintamboli>`_)\n - Casey Davidson (`@davidsoncasey <https://github.com/davidsoncasey>`_)\n - Andrii Soldatenko (`@a_soldatenko <https://github.com/andriisoldatenko>`_)\n+- Moinuddin Quadri <moin18@gmail.com> (`@moin18 <https://github.com/moin18>`_)"
+    },
+    {
+      "sha": "d1a9c8687ddf1dfe070b301b9a16c0a3bdbafa43",
+      "filename": "requests/models.py",
+      "status": "modified",
+      "additions": 27,
+      "deletions": 11,
+      "changes": 38,
+      "blob_url": "https://github.com/psf/requests/blob/fae3f92c34d8d7267de33ecb676b3d5600146257/requests%2Fmodels.py",
+      "raw_url": "https://github.com/psf/requests/raw/fae3f92c34d8d7267de33ecb676b3d5600146257/requests%2Fmodels.py",
+      "contents_url": "https://api.github.com/repos/psf/requests/contents/requests%2Fmodels.py?ref=fae3f92c34d8d7267de33ecb676b3d5600146257",
+      "patch": "@@ -9,6 +9,7 @@\n \n import collections\n import datetime\n+import sys\n \n # Import encoding now, to avoid implicit import later.\n # Implicit import within threads may cause LookupError when standard library is in a ZIP,\n@@ -21,7 +22,6 @@\n \n from .auth import HTTPBasicAuth\n from .cookies import cookiejar_from_dict, get_cookie_header, _copy_cookie_jar\n-from .packages import idna\n from .packages.urllib3.fields import RequestField\n from .packages.urllib3.filepost import encode_multipart_formdata\n from .packages.urllib3.util import parse_url\n@@ -331,6 +331,22 @@ def prepare_method(self, method):\n         if self.method is not None:\n             self.method = to_native_string(self.method.upper())\n \n+    @staticmethod\n+    def _get_idna_encoded_host(host):\n+        try:\n+            from .packages import idna\n+        except ImportError:\n+            # tolerate the possibility of downstream repackagers unvendoring `requests`\n+            # For more information, read: packages/__init__.py\n+            import idna\n+            sys.modules['requests.packages.idna'] = idna\n+\n+        try:\n+            host = idna.encode(host, uts46=True).decode('utf-8')\n+        except idna.IDNAError:\n+            raise UnicodeError\n+        return host\n+\n     def prepare_url(self, url, params):\n         \"\"\"Prepares the given HTTP URL.\"\"\"\n         #: Accept objects that have string representations.\n@@ -368,17 +384,17 @@ def prepare_url(self, url, params):\n         if not host:\n             raise InvalidURL(\"Invalid URL %r: No host supplied\" % url)\n \n-        # In general, we want to try IDNA encoding every hostname, as that\n-        # allows users to automatically get the correct behaviour. However,\n-        # we\u2019re quite strict about IDNA encoding, so certain valid hostnames\n-        # may fail to encode. On failure, we verify the hostname meets a\n-        # minimum standard of only containing ASCII characters, and not starting\n-        # with a wildcard (*), before allowing the unencoded hostname through.\n-        try:\n-            host = idna.encode(host, uts46=True).decode('utf-8')\n-        except (UnicodeError, idna.IDNAError):\n-            if not unicode_is_ascii(host) or host.startswith(u'*'):\n+        # In general, we want to try IDNA encoding the hostname if the string contains\n+        # non-ASCII characters. This allows users to automatically get the correct IDNA\n+        # behaviour. For strings containing only ASCII characters, we need to also verify\n+        # it doesn't start with a wildcard (*), before allowing the unencoded hostname.\n+        if not unicode_is_ascii(host):\n+            try:\n+                host = self._get_idna_encoded_host(host)\n+            except UnicodeError:\n                 raise InvalidURL('URL has an invalid label.')\n+        elif host.startswith(u'*'):\n+            raise InvalidURL('URL has an invalid label.')\n \n         # Carefully reconstruct the network location\n         netloc = auth or ''"
+    },
+    {
+      "sha": "971c2ad024d24b8425bad8eef7bb08a8e935fe1c",
+      "filename": "requests/packages/__init__.py",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 6,
+      "changes": 6,
+      "blob_url": "https://github.com/psf/requests/blob/fae3f92c34d8d7267de33ecb676b3d5600146257/requests%2Fpackages%2F__init__.py",
+      "raw_url": "https://github.com/psf/requests/raw/fae3f92c34d8d7267de33ecb676b3d5600146257/requests%2Fpackages%2F__init__.py",
+      "contents_url": "https://api.github.com/repos/psf/requests/contents/requests%2Fpackages%2F__init__.py?ref=fae3f92c34d8d7267de33ecb676b3d5600146257",
+      "patch": "@@ -34,9 +34,3 @@\n except ImportError:\n     import chardet\n     sys.modules['%s.chardet' % __name__] = chardet\n-\n-try:\n-    from . import idna\n-except ImportError:\n-    import idna\n-    sys.modules['%s.idna' % __name__] = idna"
+    }
+  ],
+  "ground_truth": [
+    {
+      "path": "requests/packages/__init__.py",
+      "line": 42,
+      "body": "So, here's the crux of the issue: I'm not sure we can remove this.\r\n\r\n@sigmavirus24, we added these blocks to help tolerate the possibility of downstream repackagers unvendoring us. Do we still believe we need this?"
+    },
+    {
+      "path": "requests/packages/__init__.py",
+      "line": 42,
+      "body": "@Lukasa : In order to prevent the same behavior, I think we should still be using the logic i.e. `import` with `try..except` for `idna`. But remove this code block from `__init__.py` to the place where we are importing `idna` i.e. within `_get_idna_encoded_host()` of my PR in `models.py`. What are your thoughts on this?"
+    },
+    {
+      "path": "requests/packages/__init__.py",
+      "line": 42,
+      "body": "@Lukasa we do still need this. That said, I think we can hide it in a function performs the import though."
+    },
+    {
+      "path": "requests/packages/__init__.py",
+      "line": 42,
+      "body": "@Lukasa @sigmavirus24 Updated the pull request."
+    },
+    {
+      "path": "requests/models.py",
+      "line": 397,
+      "body": "Ok, so I think this change represents a possibly-breaking behaviour. I am not *certain* of that fact, but it seems to me that we should be willing to move this into a semver-minor release to allow for the possibility that this reordering breaks some people's code. Do you agree @sigmavirus24?"
+    },
+    {
+      "path": "requests/models.py",
+      "line": 397,
+      "body": "I agree with putting it in 2.13 or 2.14. I'm not sure I see where this could break things but that said, I'm also not super familiar with the way IDNA works and how we can determine if something is valid here."
+    },
+    {
+      "path": "requests/models.py",
+      "line": 397,
+      "body": "Ok, this suggests to me that sometime over the next few weeks I should push out a urllib3 release and then we should look at a new requests minor release.\r\n\r\nIt'll be a pretty minor minor release (there are very few changes in Requests), but that's probably a good thing: would be nice to have a quiet minor release for once!\r\n\r\nHow does that sound to you @sigmavirus24?"
+    },
+    {
+      "path": "requests/models.py",
+      "line": 397,
+      "body": "\ud83d\udc4d Perhaps we should push out a bug fix requests release before that just to be safe. If people have problems with 2.13.0 they have a recent bug-fix release to fall back onto in that case. I'm not sure if we have had that many bug fixes merged since our last release though, so it may also be entirely unnecessary. ;)"
+    },
+    {
+      "path": "requests/models.py",
+      "line": 397,
+      "body": "We've had basically only one bugfix that affects code: #3791. Everything else is either documentation or test code."
+    },
+    {
+      "path": "requests/models.py",
+      "line": 397,
+      "body": "Still, version numbers are free, so we could ship a 2.12.5 with that bugfix in it and then move on from there."
+    },
+    {
+      "path": "requests/models.py",
+      "line": 397,
+      "body": "Yeah that would be good. Means that anyone who needs #3791 but runs into problems with this would have something to fall back on. =)"
+    },
+    {
+      "path": "requests/models.py",
+      "line": 397,
+      "body": "Is there anything which is needed to be taken care of from my end?\r\n"
+    }
+  ]
+}

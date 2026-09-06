@@ -1,0 +1,12 @@
+[
+  { "repo": "fastapi/fastapi", "pr_number": 2790 },
+  { "repo": "pydantic/pydantic", "pr_number": 5235 },
+  { "repo": "pydantic/pydantic", "pr_number": 2523 },
+  { "repo": "pydantic/pydantic", "pr_number": 320 },
+  { "repo": "pytest-dev/pytest", "pr_number": 13241 },
+  { "repo": "pytest-dev/pytest", "pr_number": 13757 },
+  { "repo": "pytest-dev/pytest", "pr_number": 11646 },
+  { "repo": "psf/requests", "pr_number": 3789 },
+  { "repo": "encode/httpx", "pr_number": 307 },
+  { "repo": "encode/httpx", "pr_number": 259 }
+]

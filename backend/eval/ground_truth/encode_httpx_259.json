@@ -1,0 +1,312 @@
+{
+  "repo": "encode/httpx",
+  "pr_number": 259,
+  "title": "Implement HTTP proxies and config on Client",
+  "body": "I've been able to successfully use this dispatcher against a public HTTP forwarding proxy and it works properly. :)\r\n\r\nNeed to still figure out how I'm going to test this.",
+  "head_sha": "3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66",
+  "files": [
+    {
+      "sha": "7e4057886d0835d26892908eb13cf210478e1f90",
+      "filename": "httpx/__init__.py",
+      "status": "modified",
+      "additions": 5,
+      "deletions": 0,
+      "changes": 5,
+      "blob_url": "https://github.com/encode/httpx/blob/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/httpx%2F__init__.py",
+      "raw_url": "https://github.com/encode/httpx/raw/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/httpx%2F__init__.py",
+      "contents_url": "https://api.github.com/repos/encode/httpx/contents/httpx%2F__init__.py?ref=3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66",
+      "patch": "@@ -22,6 +22,7 @@\n from .dispatch.base import AsyncDispatcher, Dispatcher\n from .dispatch.connection import HTTPConnection\n from .dispatch.connection_pool import ConnectionPool\n+from .dispatch.proxy_http import HTTPProxy, HTTPProxyMode\n from .exceptions import (\n     ConnectTimeout,\n     CookieConflict,\n@@ -30,6 +31,7 @@\n     NotRedirectResponse,\n     PoolTimeout,\n     ProtocolError,\n+    ProxyError,\n     ReadTimeout,\n     RedirectBodyUnavailable,\n     RedirectLoop,\n@@ -89,6 +91,8 @@\n     \"BasePoolSemaphore\",\n     \"BaseBackgroundManager\",\n     \"ConnectionPool\",\n+    \"HTTPProxy\",\n+    \"HTTPProxyMode\",\n     \"ConnectTimeout\",\n     \"CookieConflict\",\n     \"DecodingError\",\n@@ -102,6 +106,7 @@\n     \"ResponseClosed\",\n     \"ResponseNotRead\",\n     \"StreamConsumed\",\n+    \"ProxyError\",\n     \"Timeout\",\n     \"TooManyRedirects\",\n     \"WriteTimeout\","
+    },
+    {
+      "sha": "5f0d639cda60d83db4a07eeb398f752add27d984",
+      "filename": "httpx/api.py",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 1,
+      "changes": 1,
+      "blob_url": "https://github.com/encode/httpx/blob/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/httpx%2Fapi.py",
+      "raw_url": "https://github.com/encode/httpx/raw/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/httpx%2Fapi.py",
+      "contents_url": "https://api.github.com/repos/encode/httpx/contents/httpx%2Fapi.py?ref=3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66",
+      "patch": "@@ -27,7 +27,6 @@ def request(\n     auth: AuthTypes = None,\n     timeout: TimeoutTypes = None,\n     allow_redirects: bool = True,\n-    # proxies\n     cert: CertTypes = None,\n     verify: VerifyTypes = True,\n     stream: bool = False,"
+    },
+    {
+      "sha": "650d586925fc95fe178fb311c8c724572a55931a",
+      "filename": "httpx/client.py",
+      "status": "modified",
+      "additions": 2,
+      "deletions": 2,
+      "changes": 4,
+      "blob_url": "https://github.com/encode/httpx/blob/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/httpx%2Fclient.py",
+      "raw_url": "https://github.com/encode/httpx/raw/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/httpx%2Fclient.py",
+      "contents_url": "https://api.github.com/repos/encode/httpx/contents/httpx%2Fclient.py?ref=3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66",
+      "patch": "@@ -333,7 +333,7 @@ async def head(\n         cookies: CookieTypes = None,\n         stream: bool = False,\n         auth: AuthTypes = None,\n-        allow_redirects: bool = False,  # \u00a0Note: Differs to usual default.\n+        allow_redirects: bool = False,  # NOTE: Differs to usual default.\n         cert: CertTypes = None,\n         verify: VerifyTypes = None,\n         timeout: TimeoutTypes = None,\n@@ -783,7 +783,7 @@ def head(\n         cookies: CookieTypes = None,\n         stream: bool = False,\n         auth: AuthTypes = None,\n-        allow_redirects: bool = False,  # \u00a0Note: Differs to usual default.\n+        allow_redirects: bool = False,  # NOTE: Differs to usual default.\n         cert: CertTypes = None,\n         verify: VerifyTypes = None,\n         timeout: TimeoutTypes = None,"
+    },
+    {
+      "sha": "2cc11c9884e61d856f4b2314bb349c60759d1684",
+      "filename": "httpx/dispatch/connection_pool.py",
+      "status": "modified",
+      "additions": 13,
+      "deletions": 8,
+      "changes": 21,
+      "blob_url": "https://github.com/encode/httpx/blob/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/httpx%2Fdispatch%2Fconnection_pool.py",
+      "raw_url": "https://github.com/encode/httpx/raw/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/httpx%2Fdispatch%2Fconnection_pool.py",
+      "contents_url": "https://api.github.com/repos/encode/httpx/contents/httpx%2Fdispatch%2Fconnection_pool.py?ref=3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66",
+      "patch": "@@ -128,14 +128,8 @@ async def send(\n         return response\n \n     async def acquire_connection(self, origin: Origin) -> HTTPConnection:\n-        logger.debug(f\"acquire_connection origin={origin!r}\")\n-        connection = self.active_connections.pop_by_origin(origin, http2_only=True)\n-        if connection is None:\n-            connection = self.keepalive_connections.pop_by_origin(origin)\n-\n-        if connection is not None and connection.is_connection_dropped():\n-            self.max_connections.release()\n-            connection = None\n+        logger.debug(\"acquire_connection origin={origin!r}\")\n+        connection = self.pop_connection(origin)\n \n         if connection is None:\n             await self.max_connections.acquire()\n@@ -179,3 +173,14 @@ async def close(self) -> None:\n         self.keepalive_connections.clear()\n         for connection in connections:\n             await connection.close()\n+\n+    def pop_connection(self, origin: Origin) -> typing.Optional[HTTPConnection]:\n+        connection = self.active_connections.pop_by_origin(origin, http2_only=True)\n+        if connection is None:\n+            connection = self.keepalive_connections.pop_by_origin(origin)\n+\n+        if connection is not None and connection.is_connection_dropped():\n+            self.max_connections.release()\n+            connection = None\n+\n+        return connection"
+    },
+    {
+      "sha": "cfd227f0787feddb3d7fb91ef70d90f319fb09f2",
+      "filename": "httpx/dispatch/http11.py",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "changes": 2,
+      "blob_url": "https://github.com/encode/httpx/blob/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/httpx%2Fdispatch%2Fhttp11.py",
+      "raw_url": "https://github.com/encode/httpx/raw/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/httpx%2Fdispatch%2Fhttp11.py",
+      "contents_url": "https://api.github.com/repos/encode/httpx/contents/httpx%2Fdispatch%2Fhttp11.py?ref=3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66",
+      "patch": "@@ -153,7 +153,7 @@ async def _receive_response_data(\n             if isinstance(event, h11.Data):\n                 yield bytes(event.data)\n             else:\n-                assert isinstance(event, h11.EndOfMessage)\n+                assert isinstance(event, h11.EndOfMessage) or event is h11.PAUSED\n                 break  # pragma: no cover\n \n     async def _receive_event(self, timeout: TimeoutConfig = None) -> H11Event:"
+    },
+    {
+      "sha": "cf518f1b6ea74e31f698ab5134b19fe25499f86d",
+      "filename": "httpx/dispatch/http2.py",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "changes": 2,
+      "blob_url": "https://github.com/encode/httpx/blob/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/httpx%2Fdispatch%2Fhttp2.py",
+      "raw_url": "https://github.com/encode/httpx/raw/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/httpx%2Fdispatch%2Fhttp2.py",
+      "contents_url": "https://api.github.com/repos/encode/httpx/contents/httpx%2Fdispatch%2Fhttp2.py?ref=3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66",
+      "patch": "@@ -35,7 +35,7 @@ async def send(\n     ) -> AsyncResponse:\n         timeout = None if timeout is None else TimeoutConfig(timeout)\n \n-        # \u00a0Start sending the request.\n+        # Start sending the request.\n         if not self.initialized:\n             self.initiate_connection()\n "
+    },
+    {
+      "sha": "fe8bbd3c44e958e66217b5ef5704239eff56a9af",
+      "filename": "httpx/dispatch/proxy_http.py",
+      "status": "added",
+      "additions": 251,
+      "deletions": 0,
+      "changes": 251,
+      "blob_url": "https://github.com/encode/httpx/blob/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/httpx%2Fdispatch%2Fproxy_http.py",
+      "raw_url": "https://github.com/encode/httpx/raw/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/httpx%2Fdispatch%2Fproxy_http.py",
+      "contents_url": "https://api.github.com/repos/encode/httpx/contents/httpx%2Fdispatch%2Fproxy_http.py?ref=3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66",
+      "patch": "@@ -0,0 +1,251 @@\n+import enum\n+\n+import h11\n+\n+from ..concurrency.base import ConcurrencyBackend\n+from ..config import (\n+    DEFAULT_POOL_LIMITS,\n+    DEFAULT_TIMEOUT_CONFIG,\n+    CertTypes,\n+    PoolLimits,\n+    SSLConfig,\n+    TimeoutTypes,\n+    VerifyTypes,\n+)\n+from ..exceptions import ProxyError\n+from ..middleware.basic_auth import build_basic_auth_header\n+from ..models import (\n+    URL,\n+    AsyncRequest,\n+    AsyncResponse,\n+    Headers,\n+    HeaderTypes,\n+    Origin,\n+    URLTypes,\n+)\n+from ..utils import get_logger\n+from .connection import HTTPConnection\n+from .connection_pool import ConnectionPool\n+from .http2 import HTTP2Connection\n+from .http11 import HTTP11Connection\n+\n+logger = get_logger(__name__)\n+\n+\n+class HTTPProxyMode(enum.Enum):\n+    DEFAULT = \"DEFAULT\"\n+    FORWARD_ONLY = \"FORWARD_ONLY\"\n+    TUNNEL_ONLY = \"TUNNEL_ONLY\"\n+\n+\n+class HTTPProxy(ConnectionPool):\n+    \"\"\"A proxy that sends requests to the recipient server\n+    on behalf of the connecting client.\n+    \"\"\"\n+\n+    def __init__(\n+        self,\n+        proxy_url: URLTypes,\n+        *,\n+        proxy_headers: HeaderTypes = None,\n+        proxy_mode: HTTPProxyMode = HTTPProxyMode.DEFAULT,\n+        verify: VerifyTypes = True,\n+        cert: CertTypes = None,\n+        timeout: TimeoutTypes = DEFAULT_TIMEOUT_CONFIG,\n+        pool_limits: PoolLimits = DEFAULT_POOL_LIMITS,\n+        backend: ConcurrencyBackend = None,\n+    ):\n+\n+        super(HTTPProxy, self).__init__(\n+            verify=verify,\n+            cert=cert,\n+            timeout=timeout,\n+            pool_limits=pool_limits,\n+            backend=backend,\n+        )\n+\n+        self.proxy_url = URL(proxy_url)\n+        self.proxy_mode = proxy_mode\n+        self.proxy_headers = Headers(proxy_headers)\n+\n+        url = self.proxy_url\n+        if url.username or url.password:\n+            self.proxy_headers.setdefault(\n+                \"Proxy-Authorization\",\n+                build_basic_auth_header(url.username, url.password),\n+            )\n+            # Remove userinfo from the URL authority, e.g.:\n+            # 'username:password@proxy_host:proxy_port' -> 'proxy_host:proxy_port'\n+            credentials, _, authority = url.authority.rpartition(\"@\")\n+            self.proxy_url = url.copy_with(authority=authority)\n+\n+    async def acquire_connection(self, origin: Origin) -> HTTPConnection:\n+        if self.should_forward_origin(origin):\n+            logger.debug(\n+                f\"forward_connection proxy_url={self.proxy_url!r} origin={origin!r}\"\n+            )\n+            return await super().acquire_connection(self.proxy_url.origin)\n+        else:\n+            logger.debug(\n+                f\"tunnel_connection proxy_url={self.proxy_url!r} origin={origin!r}\"\n+            )\n+            return await self.tunnel_connection(origin)\n+\n+    async def tunnel_connection(self, origin: Origin) -> HTTPConnection:\n+        \"\"\"Creates a new HTTPConnection via the CONNECT method\n+        usually reserved for proxying HTTPS connections.\n+        \"\"\"\n+        connection = self.pop_connection(origin)\n+\n+        if connection is None:\n+            connection = await self.request_tunnel_proxy_connection(origin)\n+\n+            # After we receive the 2XX response from the proxy that our\n+            # tunnel is open we switch the connection's origin\n+            # to the original so the tunnel can be re-used.\n+            self.active_connections.remove(connection)\n+            connection.origin = origin\n+            self.active_connections.add(connection)\n+\n+            await self.tunnel_start_tls(origin, connection)\n+        else:\n+            self.active_connections.add(connection)\n+\n+        return connection\n+\n+    async def request_tunnel_proxy_connection(self, origin: Origin) -> HTTPConnection:\n+        \"\"\"Creates an HTTPConnection by setting up a TCP tunnel\"\"\"\n+        proxy_headers = self.proxy_headers.copy()\n+        proxy_headers.setdefault(\"Accept\", \"*/*\")\n+        proxy_request = AsyncRequest(\n+            method=\"CONNECT\", url=self.proxy_url.copy_with(), headers=proxy_headers\n+        )\n+        proxy_request.url.full_path = f\"{origin.host}:{origin.port}\"\n+\n+        await self.max_connections.acquire()\n+\n+        connection = HTTPConnection(\n+            self.proxy_url.origin,\n+            verify=self.verify,\n+            cert=self.cert,\n+            timeout=self.timeout,\n+            backend=self.backend,\n+            http_versions=[\"HTTP/1.1\"],  # Short-lived 'connection'\n+            trust_env=self.trust_env,\n+            release_func=self.release_connection,\n+        )\n+        self.active_connections.add(connection)\n+\n+        # See if our tunnel has been opened successfully\n+        proxy_response = await connection.send(proxy_request)\n+        logger.debug(\n+            f\"tunnel_response \"\n+            f\"proxy_url={self.proxy_url!r} \"\n+            f\"origin={origin!r} \"\n+            f\"response={proxy_response!r}\"\n+        )\n+        if not (200 <= proxy_response.status_code <= 299):\n+            await proxy_response.read()\n+            raise ProxyError(\n+                f\"Non-2XX response received from HTTP proxy \"\n+                f\"({proxy_response.status_code})\",\n+                request=proxy_request,\n+                response=proxy_response,\n+            )\n+        else:\n+            proxy_response.on_close = None\n+            await proxy_response.read()\n+\n+        return connection\n+\n+    async def tunnel_start_tls(\n+        self, origin: Origin, connection: HTTPConnection\n+    ) -> None:\n+        \"\"\"Runs start_tls() on a TCP-tunneled connection\"\"\"\n+\n+        # Store this information here so that we can transfer\n+        # it to the new internal connection object after\n+        # the old one goes to 'SWITCHED_PROTOCOL'.\n+        http_version = \"HTTP/1.1\"\n+        http_connection = connection.h11_connection\n+        assert http_connection is not None\n+        assert http_connection.h11_state.our_state == h11.SWITCHED_PROTOCOL\n+        on_release = http_connection.on_release\n+        stream = http_connection.stream\n+\n+        # If we need to start TLS again for the target server\n+        # we need to pull the TCP stream off the internal\n+        # HTTP connection object and run start_tls()\n+        if origin.is_ssl:\n+            ssl_config = SSLConfig(cert=self.cert, verify=self.verify)\n+            timeout = connection.timeout\n+            ssl_context = await connection.get_ssl_context(ssl_config)\n+            assert ssl_context is not None\n+\n+            logger.debug(\n+                f\"tunnel_start_tls \"\n+                f\"proxy_url={self.proxy_url!r} \"\n+                f\"origin={origin!r}\"\n+            )\n+            stream = await self.backend.start_tls(\n+                stream=stream,\n+                hostname=origin.host,\n+                ssl_context=ssl_context,\n+                timeout=timeout,\n+            )\n+            http_version = stream.get_http_version()\n+            logger.debug(\n+                f\"tunnel_tls_complete \"\n+                f\"proxy_url={self.proxy_url!r} \"\n+                f\"origin={origin!r} \"\n+                f\"http_version={http_version!r}\"\n+            )\n+\n+        if http_version == \"HTTP/2\":\n+            connection.h2_connection = HTTP2Connection(\n+                stream, self.backend, on_release=on_release\n+            )\n+        else:\n+            assert http_version == \"HTTP/1.1\"\n+            connection.h11_connection = HTTP11Connection(\n+                stream, self.backend, on_release=on_release\n+            )\n+\n+    def should_forward_origin(self, origin: Origin) -> bool:\n+        \"\"\"Determines if the given origin should\n+        be forwarded or tunneled. If 'proxy_mode' is 'DEFAULT'\n+        then the proxy will forward all 'HTTP' requests and\n+        tunnel all 'HTTPS' requests.\n+        \"\"\"\n+        return (\n+            self.proxy_mode == HTTPProxyMode.DEFAULT and not origin.is_ssl\n+        ) or self.proxy_mode == HTTPProxyMode.FORWARD_ONLY\n+\n+    async def send(\n+        self,\n+        request: AsyncRequest,\n+        verify: VerifyTypes = None,\n+        cert: CertTypes = None,\n+        timeout: TimeoutTypes = None,\n+    ) -> AsyncResponse:\n+\n+        if self.should_forward_origin(request.url.origin):\n+            # Change the request to have the target URL\n+            # as its full_path and switch the proxy URL\n+            # for where the request will be sent.\n+            target_url = str(request.url)\n+            request.url = self.proxy_url.copy_with()\n+            request.url.full_path = target_url\n+            for name, value in self.proxy_headers.items():\n+                request.headers.setdefault(name, value)\n+\n+        return await super().send(\n+            request=request, verify=verify, cert=cert, timeout=timeout\n+        )\n+\n+    def __repr__(self) -> str:\n+        return (\n+            f\"HTTPProxy(proxy_url={self.proxy_url!r} \"\n+            f\"proxy_headers={self.proxy_headers!r} \"\n+            f\"proxy_mode={self.proxy_mode!r})\"\n+        )"
+    },
+    {
+      "sha": "81df38b79d7d1990b45fbcc5991667b407d2ab2f",
+      "filename": "httpx/exceptions.py",
+      "status": "modified",
+      "additions": 6,
+      "deletions": 0,
+      "changes": 6,
+      "blob_url": "https://github.com/encode/httpx/blob/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/httpx%2Fexceptions.py",
+      "raw_url": "https://github.com/encode/httpx/raw/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/httpx%2Fexceptions.py",
+      "contents_url": "https://api.github.com/repos/encode/httpx/contents/httpx%2Fexceptions.py?ref=3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66",
+      "patch": "@@ -53,6 +53,12 @@ class PoolTimeout(Timeout):\n     \"\"\"\n \n \n+class ProxyError(HTTPError):\n+    \"\"\"\n+    Error from within a proxy\n+    \"\"\"\n+\n+\n # HTTP exceptions...\n \n "
+    },
+    {
+      "sha": "bba861cb78cb3c3dc756ae78b3b0f837aa07d91d",
+      "filename": "httpx/models.py",
+      "status": "modified",
+      "additions": 13,
+      "deletions": 0,
+      "changes": 13,
+      "blob_url": "https://github.com/encode/httpx/blob/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/httpx%2Fmodels.py",
+      "raw_url": "https://github.com/encode/httpx/raw/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/httpx%2Fmodels.py",
+      "contents_url": "https://api.github.com/repos/encode/httpx/contents/httpx%2Fmodels.py?ref=3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66",
+      "patch": "@@ -111,6 +111,10 @@ def __init__(\n             if not self.host:\n                 raise InvalidURL(\"No host included in URL.\")\n \n+        # Allow setting full_path to custom attributes requests\n+        # like OPTIONS, CONNECT, and forwarding proxy requests.\n+        self._full_path: typing.Optional[str] = None\n+\n     @property\n     def scheme(self) -> str:\n         return self._uri_reference.scheme or \"\"\n@@ -150,11 +154,17 @@ def query(self) -> str:\n \n     @property\n     def full_path(self) -> str:\n+        if self._full_path is not None:\n+            return self._full_path\n         path = self.path\n         if self.query:\n             path += \"?\" + self.query\n         return path\n \n+    @full_path.setter\n+    def full_path(self, value: typing.Optional[str]) -> None:\n+        self._full_path = value\n+\n     @property\n     def fragment(self) -> str:\n         return self._uri_reference.fragment or \"\"\n@@ -422,6 +432,9 @@ def update(self, headers: HeaderTypes = None) -> None:  # type: ignore\n         for header in headers:\n             self[header] = headers[header]\n \n+    def copy(self) -> \"Headers\":\n+        return Headers(self.items(), encoding=self.encoding)\n+\n     def __getitem__(self, key: str) -> str:\n         \"\"\"\n         Return a single header value."
+    },
+    {
+      "sha": "71f3007c214b786904bf8a4179d371e971ff1f2e",
+      "filename": "tests/conftest.py",
+      "status": "modified",
+      "additions": 11,
+      "deletions": 6,
+      "changes": 17,
+      "blob_url": "https://github.com/encode/httpx/blob/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/tests%2Fconftest.py",
+      "raw_url": "https://github.com/encode/httpx/raw/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/tests%2Fconftest.py",
+      "contents_url": "https://api.github.com/repos/encode/httpx/contents/tests%2Fconftest.py?ref=3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66",
+      "patch": "@@ -17,24 +17,29 @@\n \n from httpx import URL, AsyncioBackend\n \n-ENVIRONMENT_VARIABLES = (\n+ENVIRONMENT_VARIABLES = {\n     \"SSL_CERT_FILE\",\n-    \"REQUESTS_CA_BUNDLE\",\n-    \"CURL_CA_BUNDLE\",\n+    \"SSL_CERT_DIR\",\n     \"HTTP_PROXY\",\n     \"HTTPS_PROXY\",\n     \"ALL_PROXY\",\n     \"NO_PROXY\",\n     \"SSLKEYLOGFILE\",\n-)\n+}\n \n \n @pytest.fixture(scope=\"function\", autouse=True)\n def clean_environ() -> typing.Dict[str, typing.Any]:\n     \"\"\"Keeps os.environ clean for every test without having to mock os.environ\"\"\"\n     original_environ = os.environ.copy()\n-    for key in ENVIRONMENT_VARIABLES:\n-        os.environ.pop(key, None)\n+    os.environ.clear()\n+    os.environ.update(\n+        {\n+            k: v\n+            for k, v in original_environ.items()\n+            if k not in ENVIRONMENT_VARIABLES and k.lower() not in ENVIRONMENT_VARIABLES\n+        }\n+    )\n     yield\n     os.environ.clear()\n     os.environ.update(original_environ)"
+    },
+    {
+      "sha": "0302f46b5f05afab0871d6ce067dbb8fc720a72f",
+      "filename": "tests/dispatch/test_proxy_http.py",
+      "status": "added",
+      "additions": 181,
+      "deletions": 0,
+      "changes": 181,
+      "blob_url": "https://github.com/encode/httpx/blob/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/tests%2Fdispatch%2Ftest_proxy_http.py",
+      "raw_url": "https://github.com/encode/httpx/raw/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/tests%2Fdispatch%2Ftest_proxy_http.py",
+      "contents_url": "https://api.github.com/repos/encode/httpx/contents/tests%2Fdispatch%2Ftest_proxy_http.py?ref=3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66",
+      "patch": "@@ -0,0 +1,181 @@\n+import pytest\n+\n+import httpx\n+\n+from .utils import MockRawSocketBackend\n+\n+\n+async def test_proxy_tunnel_success(backend):\n+    raw_io = MockRawSocketBackend(\n+        data_to_send=(\n+            [\n+                b\"HTTP/1.1 200 OK\\r\\n\"\n+                b\"Date: Sun, 10 Oct 2010 23:26:07 GMT\\r\\n\"\n+                b\"Server: proxy-server\\r\\n\"\n+                b\"\\r\\n\",\n+                b\"HTTP/1.1 404 Not Found\\r\\n\"\n+                b\"Date: Sun, 10 Oct 2010 23:26:07 GMT\\r\\n\"\n+                b\"Server: origin-server\\r\\n\"\n+                b\"\\r\\n\",\n+            ]\n+        ),\n+        backend=backend,\n+    )\n+    async with httpx.HTTPProxy(\n+        proxy_url=\"http://127.0.0.1:8000\",\n+        backend=raw_io,\n+        proxy_mode=httpx.HTTPProxyMode.TUNNEL_ONLY,\n+    ) as proxy:\n+        response = await proxy.request(\"GET\", f\"http://example.com\")\n+\n+        assert response.status_code == 404\n+        assert response.headers[\"Server\"] == \"origin-server\"\n+\n+        assert response.request.method == \"GET\"\n+        assert response.request.url == \"http://example.com\"\n+        assert response.request.headers[\"Host\"] == \"example.com\"\n+\n+    recv = raw_io.received_data\n+    assert len(recv) == 3\n+    assert recv[0] == b\"--- CONNECT(127.0.0.1, 8000) ---\"\n+    assert recv[1].startswith(\n+        b\"CONNECT example.com:80 HTTP/1.1\\r\\nhost: 127.0.0.1:8000\\r\\n\"\n+    )\n+    assert recv[2].startswith(b\"GET / HTTP/1.1\\r\\nhost: example.com\\r\\n\")\n+\n+\n+@pytest.mark.parametrize(\"status_code\", [300, 304, 308, 401, 500])\n+async def test_proxy_tunnel_non_2xx_response(backend, status_code):\n+    raw_io = MockRawSocketBackend(\n+        data_to_send=(\n+            [\n+                b\"HTTP/1.1 %d Not Good\\r\\n\" % status_code,\n+                b\"Date: Sun, 10 Oct 2010 23:26:07 GMT\\r\\n\"\n+                b\"Server: proxy-server\\r\\n\"\n+                b\"\\r\\n\",\n+            ]\n+        ),\n+        backend=backend,\n+    )\n+\n+    with pytest.raises(httpx.ProxyError) as e:\n+        async with httpx.HTTPProxy(\n+            proxy_url=\"http://127.0.0.1:8000\",\n+            backend=raw_io,\n+            proxy_mode=httpx.HTTPProxyMode.TUNNEL_ONLY,\n+        ) as proxy:\n+            await proxy.request(\"GET\", f\"http://example.com\")\n+\n+    # ProxyError.request should be the CONNECT request not the original request\n+    assert e.value.request.method == \"CONNECT\"\n+    assert e.value.request.headers[\"Host\"] == \"127.0.0.1:8000\"\n+    assert e.value.request.url.full_path == \"example.com:80\"\n+\n+    # ProxyError.response should be the CONNECT response\n+    assert e.value.response.status_code == status_code\n+    assert e.value.response.headers[\"Server\"] == \"proxy-server\"\n+\n+    # Verify that the request wasn't sent after receiving an error from CONNECT\n+    recv = raw_io.received_data\n+    assert len(recv) == 2\n+    assert recv[0] == b\"--- CONNECT(127.0.0.1, 8000) ---\"\n+    assert recv[1].startswith(\n+        b\"CONNECT example.com:80 HTTP/1.1\\r\\nhost: 127.0.0.1:8000\\r\\n\"\n+    )\n+\n+\n+async def test_proxy_tunnel_start_tls(backend):\n+    raw_io = MockRawSocketBackend(\n+        data_to_send=(\n+            [\n+                b\"HTTP/1.1 200 OK\\r\\n\"\n+                b\"Date: Sun, 10 Oct 2010 23:26:07 GMT\\r\\n\"\n+                b\"Server: proxy-server\\r\\n\"\n+                b\"\\r\\n\",\n+                b\"HTTP/1.1 404 Not Found\\r\\n\"\n+                b\"Date: Sun, 10 Oct 2010 23:26:07 GMT\\r\\n\"\n+                b\"Server: origin-server\\r\\n\"\n+                b\"\\r\\n\",\n+            ]\n+        ),\n+        backend=backend,\n+    )\n+    async with httpx.HTTPProxy(\n+        proxy_url=\"http://127.0.0.1:8000\",\n+        backend=raw_io,\n+        proxy_mode=httpx.HTTPProxyMode.TUNNEL_ONLY,\n+    ) as proxy:\n+        response = await proxy.request(\"GET\", f\"https://example.com\")\n+\n+        assert response.status_code == 404\n+        assert response.headers[\"Server\"] == \"origin-server\"\n+\n+        assert response.request.method == \"GET\"\n+        assert response.request.url == \"https://example.com\"\n+        assert response.request.headers[\"Host\"] == \"example.com\"\n+\n+    recv = raw_io.received_data\n+    assert len(recv) == 4\n+    assert recv[0] == b\"--- CONNECT(127.0.0.1, 8000) ---\"\n+    assert recv[1].startswith(\n+        b\"CONNECT example.com:443 HTTP/1.1\\r\\nhost: 127.0.0.1:8000\\r\\n\"\n+    )\n+    assert recv[2] == b\"--- START_TLS(example.com) ---\"\n+    assert recv[3].startswith(b\"GET / HTTP/1.1\\r\\nhost: example.com\\r\\n\")\n+\n+\n+@pytest.mark.parametrize(\n+    \"proxy_mode\", [httpx.HTTPProxyMode.FORWARD_ONLY, httpx.HTTPProxyMode.DEFAULT]\n+)\n+async def test_proxy_forwarding(backend, proxy_mode):\n+    raw_io = MockRawSocketBackend(\n+        data_to_send=(\n+            [\n+                b\"HTTP/1.1 200 OK\\r\\n\"\n+                b\"Date: Sun, 10 Oct 2010 23:26:07 GMT\\r\\n\"\n+                b\"Server: origin-server\\r\\n\"\n+                b\"\\r\\n\"\n+            ]\n+        ),\n+        backend=backend,\n+    )\n+    async with httpx.HTTPProxy(\n+        proxy_url=\"http://127.0.0.1:8000\", backend=raw_io, proxy_mode=proxy_mode\n+    ) as proxy:\n+        response = await proxy.request(\"GET\", f\"http://example.com\")\n+\n+        assert response.status_code == 200\n+        assert response.headers[\"Server\"] == \"origin-server\"\n+\n+        assert response.request.method == \"GET\"\n+        assert response.request.url == \"http://127.0.0.1:8000\"\n+        assert response.request.url.full_path == \"http://example.com\"\n+        assert response.request.headers[\"Host\"] == \"example.com\"\n+\n+    recv = raw_io.received_data\n+    assert len(recv) == 2\n+    assert recv[0] == b\"--- CONNECT(127.0.0.1, 8000) ---\"\n+    assert recv[1].startswith(\n+        b\"GET http://example.com HTTP/1.1\\r\\nhost: example.com\\r\\n\"\n+    )\n+\n+\n+def test_proxy_url_with_username_and_password():\n+    proxy = httpx.HTTPProxy(\"http://user:password@example.com:1080\")\n+\n+    assert proxy.proxy_url == \"http://example.com:1080\"\n+    assert proxy.proxy_headers[\"Proxy-Authorization\"] == \"Basic dXNlcjpwYXNzd29yZA==\"\n+\n+\n+def test_proxy_repr():\n+    proxy = httpx.HTTPProxy(\n+        \"http://127.0.0.1:1080\",\n+        proxy_headers={\"Custom\": \"Header\"},\n+        proxy_mode=httpx.HTTPProxyMode.DEFAULT,\n+    )\n+\n+    assert repr(proxy) == (\n+        \"HTTPProxy(proxy_url=URL('http://127.0.0.1:1080') \"\n+        \"proxy_headers=Headers({'custom': 'Header'}) \"\n+        \"proxy_mode=<HTTPProxyMode.DEFAULT: 'DEFAULT'>)\"\n+    )"
+    },
+    {
+      "sha": "c7cbedb52fba0a1b728b811f8bf0d501c674b9ed",
+      "filename": "tests/dispatch/utils.py",
+      "status": "modified",
+      "additions": 58,
+      "deletions": 0,
+      "changes": 58,
+      "blob_url": "https://github.com/encode/httpx/blob/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/tests%2Fdispatch%2Futils.py",
+      "raw_url": "https://github.com/encode/httpx/raw/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/tests%2Fdispatch%2Futils.py",
+      "contents_url": "https://api.github.com/repos/encode/httpx/contents/tests%2Fdispatch%2Futils.py?ref=3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66",
+      "patch": "@@ -160,3 +160,61 @@ def send_return_data(self, stream_id):\n         self.returning[stream_id] = False\n         self.conn.end_stream(stream_id)\n         self.buffer += self.conn.data_to_send()\n+\n+\n+class MockRawSocketBackend:\n+    def __init__(self, data_to_send=b\"\", backend=None):\n+        self.backend = AsyncioBackend() if backend is None else backend\n+        self.data_to_send = data_to_send\n+        self.received_data = []\n+        self.stream = MockRawSocketStream(self)\n+\n+    async def connect(\n+        self,\n+        hostname: str,\n+        port: int,\n+        ssl_context: typing.Optional[ssl.SSLContext],\n+        timeout: TimeoutConfig,\n+    ) -> BaseStream:\n+        self.received_data.append(\n+            b\"--- CONNECT(%s, %d) ---\" % (hostname.encode(), port)\n+        )\n+        return self.stream\n+\n+    async def start_tls(\n+        self,\n+        stream: BaseStream,\n+        hostname: str,\n+        ssl_context: ssl.SSLContext,\n+        timeout: TimeoutConfig,\n+    ) -> BaseStream:\n+        self.received_data.append(b\"--- START_TLS(%s) ---\" % hostname.encode())\n+        return self.stream\n+\n+    # Defer all other attributes and methods to the underlying backend.\n+    def __getattr__(self, name: str) -> typing.Any:\n+        return getattr(self.backend, name)\n+\n+\n+class MockRawSocketStream(BaseStream):\n+    def __init__(self, backend: MockRawSocketBackend):\n+        self.backend = backend\n+\n+    def get_http_version(self) -> str:\n+        return \"HTTP/1.1\"\n+\n+    def write_no_block(self, data: bytes) -> None:\n+        self.backend.received_data.append(data)\n+\n+    async def write(self, data: bytes, timeout: TimeoutConfig = None) -> None:\n+        if data:\n+            self.write_no_block(data)\n+\n+    async def read(self, n, timeout, flag=None) -> bytes:\n+        await sleep(self.backend.backend, 0)\n+        if not self.backend.data_to_send:\n+            return b\"\"\n+        return self.backend.data_to_send.pop(0)\n+\n+    async def close(self) -> None:\n+        pass"
+    },
+    {
+      "sha": "0bba256690ec31a7e161a6786126e3340965e916",
+      "filename": "tests/models/test_url.py",
+      "status": "modified",
+      "additions": 7,
+      "deletions": 0,
+      "changes": 7,
+      "blob_url": "https://github.com/encode/httpx/blob/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/tests%2Fmodels%2Ftest_url.py",
+      "raw_url": "https://github.com/encode/httpx/raw/3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66/tests%2Fmodels%2Ftest_url.py",
+      "contents_url": "https://api.github.com/repos/encode/httpx/contents/tests%2Fmodels%2Ftest_url.py?ref=3a3df8aeb3a80db9d1573c08f6cdf9f285b71b66",
+      "patch": "@@ -177,6 +177,13 @@ def test_url_set():\n     assert all(url in urls for url in url_set)\n \n \n+def test_url_full_path_setter():\n+    url = URL(\"http://example.org\")\n+\n+    url.full_path = \"http://example.net\"\n+    assert url.full_path == \"http://example.net\"\n+\n+\n def test_origin_from_url_string():\n     origin = Origin(\"https://example.com\")\n     assert origin.scheme == \"https\""
+    }
+  ],
+  "ground_truth": [
+    {
+      "path": "httpx/dispatch/connection_pool.py",
+      "line": 132,
+      "body": "It seems we've lost the `logger.debug()` call here?"
+    },
+    {
+      "path": "httpx/client.py",
+      "line": 954,
+      "body": "Should we raise a custom exception type here? Perhaps `InvalidURL`?\r\n\r\nAlso \"Unknown\" isn't very informative as to *why* the URL is unknown \u2014 something about the condition two lines about would be more helpful if we encounter this error as a user. :-)"
+    },
+    {
+      "path": "httpx/dispatch/proxy_http.py",
+      "line": 36,
+      "body": "Why is it not recommended for HTTPS? (I see we *do* handle the HTTPS case, so perhaps there's a security guideline I'm missing? If so, maybe we can be more explicit about the reason here.)"
+    },
+    {
+      "path": "httpx/middleware.py",
+      "line": 165,
+      "body": "I actually had to extract this helper function for https://github.com/encode/httpx/pull/298 as well. Perhaps worth its own quick PR?"
+    },
+    {
+      "path": "httpx/utils.py",
+      "line": 155,
+      "body": "Could we clarify we do this because `all_proxy` is by convention generally given as lowercase, contrary to most environment variables?"
+    },
+    {
+      "path": "httpx/dispatch/proxy_http.py",
+      "line": 36,
+      "body": "Ah, that comment no longer applies as CONNECT is the preferred method for HTTPS proxying. Before I merged the two PRs into one this comment was there."
+    },
+    {
+      "path": "httpx/client.py",
+      "line": 954,
+      "body": "Maybe we should raise ProxyError? Yeah that message is not good, will fix."
+    },
+    {
+      "path": "httpx/dispatch/connection_pool.py",
+      "line": 132,
+      "body": "Yep, will restore!"
+    },
+    {
+      "path": "httpx/client.py",
+      "line": 954,
+      "body": "I don't know about `ProxyError` \u2014 right now it's documented as an error raised from *within* a proxy. I do think it's a case for an `InvalidURL` error here."
+    },
+    {
+      "path": "httpx/client.py",
+      "line": 267,
+      "body": "Also, it seems this method isn't being called anywhere \u2014 I assume this is still WIP then?"
+    },
+    {
+      "path": "httpx/client.py",
+      "line": 55,
+      "body": "This should probably go in `models.py` along with the other reusable types."
+    },
+    {
+      "path": "httpx/middleware.py",
+      "line": 161,
+      "body": "Out of curiosity, why defaults to \u2018latin1\u2019? "
+    },
+    {
+      "path": "httpx/middleware.py",
+      "line": 161,
+      "body": "Technically the RFC says we can use any encoding as long as it's US-ASCII compatible (recommends `latin1` and `utf-8`) so we can switch to UTF-8 here and still be compliant. I'm almost leaning towards we should switch, UTF-8 is ubiquitous. What do others think?\r\n\r\nFor reference: [RFC 7617 Section 2](https://tools.ietf.org/html/rfc7617#section-2)"
+    },
+    {
+      "path": "httpx/middleware.py",
+      "line": 161,
+      "body": "Yes, utf-8 probably makes sense given the spec there.\r\n\r\nAn alternative: We *could* potentially defer to whatever `request.headers.encoding` is set as (we wouldn't be able to build this string at the point of `__init__`, but that's okay.) We would probably then want our logic to be something like...\r\n\r\n```python\r\nif request.headers.encoding in ('ascii', 'utf-8'):\r\n    encoding = 'utf-8'\r\nelse:\r\n    encoding = request.headers.encoding\r\n```\r\n\r\nI'm not convinced that'd be better overall tho - just sticking with utf-8 in this case seems reasonable."
+    },
+    {
+      "path": "httpx/middleware.py",
+      "line": 161,
+      "body": "Let's use utf-8, and reference the `RFC 7617 Section 2 link in a code comment, yeah?\r\nIf users need something else then they can use a customized auth class/middleware instead."
+    },
+    {
+      "path": "httpx/client.py",
+      "line": 55,
+      "body": "Can't go there because of the `AsyncDispatcher` type :/"
+    },
+    {
+      "path": "httpx/client.py",
+      "line": 954,
+      "body": "Agreed, I'll have to add that."
+    },
+    {
+      "path": "httpx/client.py",
+      "line": 55,
+      "body": "Would using the if typing.TYPE_CHECKING trick and forward-referencing AsyncDispatcher (ie putting it in quotes in the type) solve it? https://mypy.readthedocs.io/en/latest/common_issues.html#import-cycles\r\n\r\nSee also this discussion: https://github.com/encode/httpx/pull/305#discussion_r321125214"
+    },
+    {
+      "path": "httpx/dispatch/proxy_http.py",
+      "line": 112,
+      "body": "Could we break the long `if` branch into its own aux method?"
+    },
+    {
+      "path": "httpx/dispatch/proxy_http.py",
+      "line": 137,
+      "body": "I feel this section along with the creation of the proxy headers could live in an aux method as it's fairly self contained, maybe a `self._request_proxy_connection`?"
+    },
+    {
+      "path": "tests/models/test_url.py",
+      "line": 183,
+      "body": "Maybe the assignment should be a different URL?"
+    },
+    {
+      "path": "tests/dispatch/utils.py",
+      "line": 165,
+      "body": "This is pretty awesome \ud83d\udcaf "
+    },
+    {
+      "path": "httpx/dispatch/proxy_http.py",
+      "line": 77,
+      "body": "Is this related to https://github.com/encode/httpx/issues/328? Should we add a comment?"
+    },
+    {
+      "path": "httpx/dispatch/proxy_http.py",
+      "line": 77,
+      "body": "No, this is how to split userinfo from authority. Rfc3986 package doesn't provide an easy way to work with subauthority components. :("
+    },
+    {
+      "path": "httpx/dispatch/proxy_http.py",
+      "line": 77,
+      "body": "I'm a bit confused.\r\n\r\n*If* this could just read `url.copy_with(authority=url.<some_named_property>)` then what is `<some_named_property>` here? Are we missing a property that we ought to add on our `URL` model?"
+    },
+    {
+      "path": "httpx/dispatch/proxy_http.py",
+      "line": 77,
+      "body": "It would be the authority minus the auth section. I don't think we're missing any component, just the underlying rfc3986 library doesn't provide the tools to remove the userinfo section cleanly."
+    },
+    {
+      "path": "tests/dispatch/test_proxy_http.py",
+      "line": 69,
+      "body": "Nit: Woudn't this be covered by the `pytest.raises` above?"
+    },
+    {
+      "path": "httpx/dispatch/proxy_http.py",
+      "line": 112,
+      "body": "I guess this has been resolved? :)"
+    },
+    {
+      "path": "httpx/dispatch/proxy_http.py",
+      "line": 77,
+      "body": "Assuming we'd be given `url` values such as\u2026\r\n\r\n- https://domain.net\r\n- https://username:password@domain.net\r\n- https://username@gmail.com:password@domain.net (once fixed)\r\n\r\nIsn't this computation the same as `url.host` (which outputs `domain.net`)?\r\n\r\nEdit: it's not, forget this. :)"
+    }
+  ]
+}

@@ -1,0 +1,119 @@
+{
+  "repo": "pydantic/pydantic",
+  "pr_number": 320,
+  "title": "Properly set Config in create_model",
+  "body": "## Change Summary\n\nSet the Config attribute in create_model, so it is found by the\nMetaModel.  Pushes the field and validator configuration into the\nmetaclass.\n\n## Related issue number\n\nNone\n\n## Performance Changes\n\nNot run.\n\n## Checklist\n\n* [x] Unit tests for the changes exist\n* [x] Tests pass on CI and coverage remains at 100%\n* [x] Documentation reflects the changes\n* [x] No performance deterioration (if applicable)\n* [x] `HISTORY.rst` has been updated\n  * if this is the first change since a release, please add a new section\n  * include the issue number or this pull request number `#<number>`\n  * if you're not a regular contributer please include your github username `@whatever`",
+  "head_sha": "457f40dc5d48e07a9d536aa0debddb4350a9240d",
+  "files": [
+    {
+      "sha": "66dcddf635e724b76fd7ae30fb1cc67f6181c8b0",
+      "filename": "HISTORY.rst",
+      "status": "modified",
+      "additions": 4,
+      "deletions": 0,
+      "changes": 4,
+      "blob_url": "https://github.com/pydantic/pydantic/blob/457f40dc5d48e07a9d536aa0debddb4350a9240d/HISTORY.rst",
+      "raw_url": "https://github.com/pydantic/pydantic/raw/457f40dc5d48e07a9d536aa0debddb4350a9240d/HISTORY.rst",
+      "contents_url": "https://api.github.com/repos/pydantic/pydantic/contents/HISTORY.rst?ref=457f40dc5d48e07a9d536aa0debddb4350a9240d",
+      "patch": "@@ -3,6 +3,10 @@\n History\n -------\n \n+v0.16.1 (Unreleased)\n+....................\n+* fix ``create_model`` to correctly use the passed ``__config__``, #320 by @hugoduncan\n+\n v0.16.0 (2018-12-03)\n ....................\n * **breaking change**: refactor schema generation to be compatible with JSON Schema and OpenAPI specs, #308 by @tiangolo"
+    },
+    {
+      "sha": "9c6462425c9f7ae2ed11392f7a9999ecc0d60951",
+      "filename": "pydantic/main.py",
+      "status": "modified",
+      "additions": 26,
+      "deletions": 19,
+      "changes": 45,
+      "blob_url": "https://github.com/pydantic/pydantic/blob/457f40dc5d48e07a9d536aa0debddb4350a9240d/pydantic%2Fmain.py",
+      "raw_url": "https://github.com/pydantic/pydantic/raw/457f40dc5d48e07a9d536aa0debddb4350a9240d/pydantic%2Fmain.py",
+      "contents_url": "https://api.github.com/repos/pydantic/pydantic/contents/pydantic%2Fmain.py?ref=457f40dc5d48e07a9d536aa0debddb4350a9240d",
+      "patch": "@@ -100,17 +100,28 @@ def _extract_validators(namespace):\n     return validators\n \n \n+def inherit_validators(base_validators, validators):\n+    for field, field_validators in base_validators.items():\n+        if field not in validators:\n+            validators[field] = []\n+        validators[field] += field_validators\n+    return validators\n+\n+\n class MetaModel(ABCMeta):\n     def __new__(mcs, name, bases, namespace):\n         fields: Dict[name, Field] = {}\n         config = BaseConfig\n+        validators = {}\n         for base in reversed(bases):\n             if issubclass(base, BaseModel) and base != BaseModel:\n-                fields.update(base.__fields__)\n+                fields.update(deepcopy(base.__fields__))\n                 config = inherit_config(base.__config__, config)\n+                validators = inherit_validators(base.__validators__, validators)\n \n         config = inherit_config(namespace.get('Config'), config)\n-        vg = ValidatorGroup(_extract_validators(namespace))\n+        validators = inherit_validators(_extract_validators(namespace), validators)\n+        vg = ValidatorGroup(validators)\n \n         for f in fields.values():\n             f.set_config(config)\n@@ -402,19 +413,17 @@ def create_model(\n         `<name>=(<type>, <default default>)` or `<name>=<default value> eg. `foobar=(str, ...)` or `foobar=123`\n     \"\"\"\n     if __base__:\n-        fields = deepcopy(__base__.__fields__)\n-        validators = __base__.__validators__\n         if __config__ is not None:\n             raise ConfigError('to avoid confusion __config__ and __base__ cannot be used together')\n     else:\n         __base__ = BaseModel\n-        fields = {}\n-        validators = {}\n \n-    config = __config__ or BaseConfig\n-    vg = ValidatorGroup(validators)\n+    fields = {}\n+    annotations = {}\n \n     for f_name, f_def in field_definitions.items():\n+        if f_name.startswith('_'):\n+            warnings.warn(f'fields may not start with an underscore, ignoring \"{f_name}\"', RuntimeWarning)\n         if isinstance(f_def, tuple):\n             try:\n                 f_annotation, f_value = f_def\n@@ -426,18 +435,16 @@ def create_model(\n                 ) from e\n         else:\n             f_annotation, f_value = None, f_def\n-        if f_name.startswith('_'):\n-            warnings.warn(f'fields may not start with an underscore, ignoring \"{f_name}\"', RuntimeWarning)\n-        else:\n-            fields[f_name] = Field.infer(\n-                name=f_name,\n-                value=f_value,\n-                annotation=f_annotation,\n-                class_validators=vg.get_validators(f_name),\n-                config=config,\n-            )\n \n-    namespace = {'config': config, '__fields__': fields}\n+        if f_annotation:\n+            annotations[f_name] = f_annotation\n+        fields[f_name] = f_value\n+\n+    namespace = {'__annotations__': annotations}\n+    namespace.update(fields)\n+    if __config__:\n+        namespace['Config'] = __config__\n+\n     return type(model_name, (__base__,), namespace)\n \n "
+    },
+    {
+      "sha": "c12838a7615329f4437959214abbb77b3587ff27",
+      "filename": "tests/test_create_model.py",
+      "status": "modified",
+      "additions": 28,
+      "deletions": 0,
+      "changes": 28,
+      "blob_url": "https://github.com/pydantic/pydantic/blob/457f40dc5d48e07a9d536aa0debddb4350a9240d/tests%2Ftest_create_model.py",
+      "raw_url": "https://github.com/pydantic/pydantic/raw/457f40dc5d48e07a9d536aa0debddb4350a9240d/tests%2Ftest_create_model.py",
+      "contents_url": "https://api.github.com/repos/pydantic/pydantic/contents/tests%2Ftest_create_model.py?ref=457f40dc5d48e07a9d536aa0debddb4350a9240d",
+      "patch": "@@ -61,6 +61,17 @@ class Config(BaseModel.Config):\n         model(foo=654)\n \n \n+def test_custom_config_extras():\n+    class Config(BaseModel.Config):\n+        ignore_extra = False\n+        allow_extra = False\n+\n+    model = create_model('FooModel', foo=(int, ...), __config__=Config)\n+    assert model(foo=654)\n+    with pytest.raises(ValidationError):\n+        model(bar=654)\n+\n+\n def test_inheritance_validators():\n     class BarModel(BaseModel):\n         @validator('a', check_fields=False)\n@@ -71,6 +82,23 @@ def check_a(cls, v):\n \n     model = create_model('FooModel', a='cake', __base__=BarModel)\n     assert model().a == 'cake'\n+    assert model(a='this is foobar good').a == 'this is foobar good'\n+    with pytest.raises(ValidationError):\n+        model(a='something else')\n+\n+\n+def test_inheritance_validators_always():\n+    class BarModel(BaseModel):\n+        @validator('a', check_fields=False, always=True)\n+        def check_a(cls, v):\n+            if 'foobar' not in v:\n+                raise ValueError('\"foobar\" not found in a')\n+            return v\n+\n+    model = create_model('FooModel', a='cake', __base__=BarModel)\n+    with pytest.raises(ValidationError):\n+        model()\n+    assert model(a='this is foobar good').a == 'this is foobar good'\n     with pytest.raises(ValidationError):\n         model(a='something else')\n "
+    },
+    {
+      "sha": "d31deb2c5aad4251fcb365ee41c72cf343080c41",
+      "filename": "tests/test_validators.py",
+      "status": "modified",
+      "additions": 63,
+      "deletions": 2,
+      "changes": 65,
+      "blob_url": "https://github.com/pydantic/pydantic/blob/457f40dc5d48e07a9d536aa0debddb4350a9240d/tests%2Ftest_validators.py",
+      "raw_url": "https://github.com/pydantic/pydantic/raw/457f40dc5d48e07a9d536aa0debddb4350a9240d/tests%2Ftest_validators.py",
+      "contents_url": "https://api.github.com/repos/pydantic/pydantic/contents/tests%2Ftest_validators.py?ref=457f40dc5d48e07a9d536aa0debddb4350a9240d",
+      "patch": "@@ -315,7 +315,7 @@ def check_b(cls, v):\n     )\n \n \n-def test_validate_parent():\n+def test_validate_child():\n     class Parent(BaseModel):\n         a: str\n \n@@ -326,12 +326,13 @@ def check_a(cls, v):\n                 raise ValueError('\"foobar\" not found in a')\n             return v\n \n+    assert Parent(a='this is not a child').a == 'this is not a child'\n     assert Child(a='this is foobar good').a == 'this is foobar good'\n     with pytest.raises(ValidationError):\n         Child(a='snap')\n \n \n-def test_validate_parent_extra():\n+def test_validate_child_extra():\n     class Parent(BaseModel):\n         a: str\n \n@@ -346,11 +347,71 @@ class Child(Parent):\n         def check_a_two(cls, v):\n             return v.upper()\n \n+    assert Parent(a='this is foobar good').a == 'this is foobar good'\n     assert Child(a='this is foobar good').a == 'THIS IS FOOBAR GOOD'\n     with pytest.raises(ValidationError):\n         Child(a='snap')\n \n \n+def test_validate_child_all():\n+    class Parent(BaseModel):\n+        a: str\n+\n+    class Child(Parent):\n+        @validator('*')\n+        def check_a(cls, v):\n+            if 'foobar' not in v:\n+                raise ValueError('\"foobar\" not found in a')\n+            return v\n+\n+    assert Parent(a='this is not a child').a == 'this is not a child'\n+    assert Child(a='this is foobar good').a == 'this is foobar good'\n+    with pytest.raises(ValidationError):\n+        Child(a='snap')\n+\n+\n+def test_validate_parent():\n+    class Parent(BaseModel):\n+        a: str\n+\n+        @validator('a')\n+        def check_a(cls, v):\n+            if 'foobar' not in v:\n+                raise ValueError('\"foobar\" not found in a')\n+            return v\n+\n+    class Child(Parent):\n+        pass\n+\n+    assert Parent(a='this is foobar good').a == 'this is foobar good'\n+    assert Child(a='this is foobar good').a == 'this is foobar good'\n+    with pytest.raises(ValidationError):\n+        Parent(a='snap')\n+    with pytest.raises(ValidationError):\n+        Child(a='snap')\n+\n+\n+def test_validate_parent_all():\n+    class Parent(BaseModel):\n+        a: str\n+\n+        @validator('*')\n+        def check_a(cls, v):\n+            if 'foobar' not in v:\n+                raise ValueError('\"foobar\" not found in a')\n+            return v\n+\n+    class Child(Parent):\n+        pass\n+\n+    assert Parent(a='this is foobar good').a == 'this is foobar good'\n+    assert Child(a='this is foobar good').a == 'this is foobar good'\n+    with pytest.raises(ValidationError):\n+        Parent(a='snap')\n+    with pytest.raises(ValidationError):\n+        Child(a='snap')\n+\n+\n def test_pattern():\n     class Foobar(BaseModel):\n         pattern: Pattern"
+    }
+  ],
+  "ground_truth": [
+    {
+      "path": "pydantic/main.py",
+      "line": 103,
+      "body": "better if this method returns `validators` so it's clear what's going on."
+    },
+    {
+      "path": "pydantic/main.py",
+      "line": 105,
+      "body": "better to be explicit\r\n\r\n```py\r\nif field in validators:\r\n    validators[field] += field_validators\r\nelse:\r\n    validators[field] = field_validators\r\n```"
+    },
+    {
+      "path": "pydantic/main.py",
+      "line": 446,
+      "body": "single quotes please."
+    },
+    {
+      "path": "pydantic/main.py",
+      "line": 441,
+      "body": "Is this definitely not required? if so please remove."
+    },
+    {
+      "path": "tests/test_create_model.py",
+      "line": 69,
+      "body": "I haven't got around to finding a way to lint this, but pydantic should use single quotes always unless single quotes are used in the string."
+    },
+    {
+      "path": "pydantic/main.py",
+      "line": 441,
+      "body": "I'll strip out some more incorrect validator logic."
+    },
+    {
+      "path": "tests/test_create_model.py",
+      "line": 69,
+      "body": "We struggled with this with black as well.  Ended up just using the Black convention."
+    },
+    {
+      "path": "pydantic/main.py",
+      "line": 105,
+      "body": "if you want to do it this way\r\n\r\n```py\r\nif field not in validators:\r\n    validators[field] = []\r\nvalidators[field] += field_validators\r\n```"
+    },
+    {
+      "path": "pydantic/main.py",
+      "line": 125,
+      "body": "`validators = `"
+    },
+    {
+      "path": "pydantic/main.py",
+      "line": 105,
+      "body": "This is to avoid mutating the validators in the base classes.\r\n```python\r\na = []\r\nb = a\r\nb += [1]\r\nassert a == [1]\r\n```"
+    },
+    {
+      "path": "pydantic/main.py",
+      "line": 105,
+      "body": "what I've suggested has exactly the same effect as what you have now, just avoids duplicated lines."
+    },
+    {
+      "path": "tests/test_validators.py",
+      "line": 356,
+      "body": "looks like this test and the one at the bottom should swap name, so this becomes `test_validate_child_all`."
+    }
+  ]
+}

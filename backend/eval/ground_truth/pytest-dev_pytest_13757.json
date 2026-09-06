@@ -1,0 +1,374 @@
+{
+  "repo": "pytest-dev/pytest",
+  "pr_number": 13757,
+  "title": "feat: add --require-unique-paramset-ids option skips pytest internal \u2026",
+  "body": "- Added flag to skip attempting to generate parametrization ids and just raise error on duplicate ids during collection\r\n\r\nCloses #13737",
+  "head_sha": "5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48",
+  "files": [
+    {
+      "sha": "b28f49776d664a1dddcba30e88336a135903983a",
+      "filename": "AUTHORS",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 0,
+      "changes": 1,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48/AUTHORS",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48/AUTHORS",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/AUTHORS?ref=5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48",
+      "patch": "@@ -346,6 +346,7 @@ Oliver Bestwalter\n Olivier Grisel\n Omar Kohl\n Omer Hadari\n+Omri Golan\n Ond\u0159ej S\u00fakup\n Oscar Benjamin\n Parth Patel"
+    },
+    {
+      "sha": "e7fe7fd3ab79cf9e8fa6013f46e2a7a5930df772",
+      "filename": "changelog/13737.feature.rst",
+      "status": "added",
+      "additions": 4,
+      "deletions": 0,
+      "changes": 4,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48/changelog%2F13737.feature.rst",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48/changelog%2F13737.feature.rst",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/changelog%2F13737.feature.rst?ref=5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48",
+      "patch": "@@ -0,0 +1,4 @@\n+Added the :confval:`strict_parametrization_ids` configuration option.\n+\n+When set, pytest emits an error if it detects non-unique parameter set IDs,\n+rather than automatically making the IDs unique by adding `0`, `1`, ... to them."
+    },
+    {
+      "sha": "3dfa11901ea4e32c258e8dcbd0f96d8942e06712",
+      "filename": "doc/en/reference/reference.rst",
+      "status": "modified",
+      "additions": 38,
+      "deletions": 0,
+      "changes": 38,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48/doc%2Fen%2Freference%2Freference.rst",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48/doc%2Fen%2Freference%2Freference.rst",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/doc%2Fen%2Freference%2Freference.rst?ref=5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48",
+      "patch": "@@ -2082,6 +2082,44 @@ passed multiple times. The expected format is ``name=value``. For example::\n         [pytest]\n         xfail_strict = True\n \n+.. confval:: strict_parametrization_ids\n+\n+    If set, pytest emits an error if it detects non-unique parameter set IDs.\n+\n+    If not set (the default), pytest automatically handles this by adding `0`, `1`, ... to duplicate IDs,\n+    making them unique.\n+\n+    .. code-block:: ini\n+\n+          [pytest]\n+          strict_parametrization_ids = True\n+\n+    For example,\n+\n+    .. code-block:: python\n+\n+        import pytest\n+\n+\n+        @pytest.mark.parametrize(\"letter\", [\"a\", \"a\"])\n+        def test_letter_is_ascii(letter):\n+            assert letter.isascii()\n+\n+    will emit an error because both cases (parameter sets) have the same auto-generated ID \"a\".\n+\n+    To fix the error, if you decide to keep the duplicates, explicitly assign unique IDs:\n+\n+    .. code-block:: python\n+\n+        import pytest\n+\n+\n+        @pytest.mark.parametrize(\"letter\", [\"a\", \"a\"], ids=[\"a0\", \"a1\"])\n+        def test_letter_is_ascii(letter):\n+            assert letter.isascii()\n+\n+    See :func:`parametrize <pytest.Metafunc.parametrize>` and :func:`pytest.param` for other ways to set IDs.\n+\n \n .. _`command-line-flags`:\n "
+    },
+    {
+      "sha": "964c4f449dca96fc6bc17ef0aa2190b67cc8baa8",
+      "filename": "pyproject.toml",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 0,
+      "changes": 1,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48/pyproject.toml",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48/pyproject.toml",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/pyproject.toml?ref=5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48",
+      "patch": "@@ -379,6 +379,7 @@ norecursedirs = [\n     \"dist\",\n ]\n xfail_strict = true\n+strict_parametrization_ids = true\n filterwarnings = [\n     \"error\",\n     \"default:Using or importing the ABCs:DeprecationWarning:unittest2.*\","
+    },
+    {
+      "sha": "4dbf1cc8775b91513fddb6aa39a4b1237612691c",
+      "filename": "src/_pytest/python.py",
+      "status": "modified",
+      "additions": 44,
+      "deletions": 2,
+      "changes": 46,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48/src%2F_pytest%2Fpython.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48/src%2F_pytest%2Fpython.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/src%2F_pytest%2Fpython.py?ref=5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48",
+      "patch": "@@ -21,6 +21,7 @@\n import os\n from pathlib import Path\n import re\n+import textwrap\n import types\n from typing import Any\n from typing import final\n@@ -107,6 +108,12 @@ def pytest_addoption(parser: Parser) -> None:\n         help=\"Disable string escape non-ASCII characters, might cause unwanted \"\n         \"side effects(use at your own risk)\",\n     )\n+    parser.addini(\n+        \"strict_parametrization_ids\",\n+        type=\"bool\",\n+        default=False,\n+        help=\"Emit an error if non-unique parameter set IDs are detected\",\n+    )\n \n \n def pytest_generate_tests(metafunc: Metafunc) -> None:\n@@ -878,8 +885,8 @@ class IdMaker:\n     # Optionally, explicit IDs for ParameterSets by index.\n     ids: Sequence[object | None] | None\n     # Optionally, the pytest config.\n-    # Used for controlling ASCII escaping, and for calling the\n-    # :hook:`pytest_make_parametrize_id` hook.\n+    # Used for controlling ASCII escaping, determining parametrization ID\n+    # strictness, and for calling the :hook:`pytest_make_parametrize_id` hook.\n     config: Config | None\n     # Optionally, the ID of the node being parametrized.\n     # Used only for clearer error messages.\n@@ -892,6 +899,9 @@ def make_unique_parameterset_ids(self) -> list[str | _HiddenParam]:\n         \"\"\"Make a unique identifier for each ParameterSet, that may be used to\n         identify the parametrization in a node ID.\n \n+        If strict_parametrization_ids is enabled, and duplicates are detected,\n+        raises CollectError. Otherwise makes the IDs unique as follows:\n+\n         Format is <prm_1_token>-...-<prm_n_token>[counter], where prm_x_token is\n         - user-provided id, if given\n         - else an id derived from the value, applicable for certain types\n@@ -904,6 +914,33 @@ def make_unique_parameterset_ids(self) -> list[str | _HiddenParam]:\n         if len(resolved_ids) != len(set(resolved_ids)):\n             # Record the number of occurrences of each ID.\n             id_counts = Counter(resolved_ids)\n+\n+            if self._strict_parametrization_ids_enabled():\n+                parameters = \", \".join(self.argnames)\n+                parametersets = \", \".join(\n+                    [saferepr(list(param.values)) for param in self.parametersets]\n+                )\n+                ids = \", \".join(\n+                    id if id is not HIDDEN_PARAM else \"<hidden>\" for id in resolved_ids\n+                )\n+                duplicates = \", \".join(\n+                    id if id is not HIDDEN_PARAM else \"<hidden>\"\n+                    for id, count in id_counts.items()\n+                    if count > 1\n+                )\n+                msg = textwrap.dedent(f\"\"\"\n+                    Duplicate parametrization IDs detected, but strict_parametrization_ids is set.\n+\n+                    Test name:      {self.nodeid}\n+                    Parameters:     {parameters}\n+                    Parameter sets: {parametersets}\n+                    IDs:            {ids}\n+                    Duplicates:     {duplicates}\n+\n+                    You can fix this problem using `@pytest.mark.parametrize(..., ids=...)` or `pytest.param(..., id=...)`.\n+                \"\"\").strip()  # noqa: E501\n+                raise nodes.Collector.CollectError(msg)\n+\n             # Map the ID to its next suffix.\n             id_suffixes: dict[str, int] = defaultdict(int)\n             # Suffix non-unique IDs to make them unique.\n@@ -925,6 +962,11 @@ def make_unique_parameterset_ids(self) -> list[str | _HiddenParam]:\n         )\n         return resolved_ids\n \n+    def _strict_parametrization_ids_enabled(self) -> bool:\n+        if self.config:\n+            return bool(self.config.getini(\"strict_parametrization_ids\"))\n+        return False\n+\n     def _resolve_ids(self) -> Iterable[str | _HiddenParam]:\n         \"\"\"Resolve IDs for all ParameterSets (may contain duplicates).\"\"\"\n         for idx, parameterset in enumerate(self.parametersets):"
+    },
+    {
+      "sha": "e7301c273e05a4b8470adfaa8096dc581b1ed8b4",
+      "filename": "testing/_py/test_local.py",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "changes": 2,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48/testing%2F_py%2Ftest_local.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48/testing%2F_py%2Ftest_local.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2F_py%2Ftest_local.py?ref=5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48",
+      "patch": "@@ -209,7 +209,7 @@ def test_visit_norecurse(self, path1):\n \n     @pytest.mark.parametrize(\n         \"fil\",\n-        [\"*dir\", \"*dir\", pytest.mark.skip(\"sys.version_info < (3,6)\")(b\"*dir\")],\n+        [\"*dir\", pytest.mark.skip(\"sys.version_info < (3,6)\")(b\"*dir\")],\n     )\n     def test_visit_filterfunc_is_string(self, path1, fil):\n         lst = []"
+    },
+    {
+      "sha": "153811dea3e862ce59a48deda66b2366c6175b91",
+      "filename": "testing/test_collection.py",
+      "status": "modified",
+      "additions": 92,
+      "deletions": 0,
+      "changes": 92,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48/testing%2Ftest_collection.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48/testing%2Ftest_collection.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_collection.py?ref=5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48",
+      "patch": "@@ -1,6 +1,7 @@\n # mypy: allow-untyped-defs\n from __future__ import annotations\n \n+from collections.abc import Sequence\n import os\n from pathlib import Path\n from pathlib import PurePath\n@@ -2702,3 +2703,94 @@ def test_1(): pass\n             ],\n             consecutive=True,\n         )\n+\n+\n+@pytest.mark.parametrize(\n+    [\"x_y\", \"expected_duplicates\"],\n+    [\n+        (\n+            [(1, 1), (1, 1)],\n+            [\"1-1\"],\n+        ),\n+        (\n+            [(1, 1), (1, 2), (1, 1)],\n+            [\"1-1\"],\n+        ),\n+        (\n+            [(1, 1), (2, 2), (1, 1)],\n+            [\"1-1\"],\n+        ),\n+        (\n+            [(1, 1), (2, 2), (1, 2), (2, 1), (1, 1), (2, 1)],\n+            [\"1-1\", \"2-1\"],\n+        ),\n+    ],\n+)\n+def test_strict_parametrization_ids(\n+    pytester: Pytester,\n+    x_y: Sequence[tuple[int, int]],\n+    expected_duplicates: Sequence[str],\n+) -> None:\n+    pytester.makeini(\n+        \"\"\"\n+        [pytest]\n+        strict_parametrization_ids = true\n+        \"\"\"\n+    )\n+    pytester.makepyfile(\n+        f\"\"\"\n+        import pytest\n+\n+        @pytest.mark.parametrize([\"x\", \"y\"], {x_y})\n+        def test1(x, y):\n+            pass\n+        \"\"\"\n+    )\n+\n+    result = pytester.runpytest()\n+\n+    assert result.ret == ExitCode.INTERRUPTED\n+    expected_parametersets = \", \".join(str(list(p)) for p in x_y)\n+    expected_ids = \", \".join(f\"{x}-{y}\" for x, y in x_y)\n+    result.stdout.fnmatch_lines(\n+        [\n+            \"Duplicate parametrization IDs detected*\",\n+            \"\",\n+            \"Test name:      *::test1\",\n+            \"Parameters:     x, y\",\n+            f\"Parameter sets: {expected_parametersets}\",\n+            f\"IDs:            {expected_ids}\",\n+            f\"Duplicates:     {', '.join(expected_duplicates)}\",\n+            \"\",\n+            \"You can fix this problem using *\",\n+        ]\n+    )\n+\n+\n+def test_strict_parametrization_ids_with_hidden_param(pytester: Pytester) -> None:\n+    pytester.makeini(\n+        \"\"\"\n+        [pytest]\n+        strict_parametrization_ids = true\n+        \"\"\"\n+    )\n+    pytester.makepyfile(\n+        \"\"\"\n+        import pytest\n+\n+        @pytest.mark.parametrize([\"x\"], [\"a\", pytest.param(\"a\", id=pytest.HIDDEN_PARAM), \"a\"])\n+        def test1(x):\n+            pass\n+        \"\"\"\n+    )\n+\n+    result = pytester.runpytest()\n+\n+    assert result.ret == ExitCode.INTERRUPTED\n+    result.stdout.fnmatch_lines(\n+        [\n+            \"Duplicate parametrization IDs detected*\",\n+            \"IDs:            a, <hidden>, a\",\n+            \"Duplicates:     a\",\n+        ]\n+    )"
+    },
+    {
+      "sha": "e2ca1119e9215d48384ec6b727322140f0268e5c",
+      "filename": "testing/test_doctest.py",
+      "status": "modified",
+      "additions": 8,
+      "deletions": 1,
+      "changes": 9,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48/testing%2Ftest_doctest.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48/testing%2Ftest_doctest.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_doctest.py?ref=5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48",
+      "patch": "@@ -1596,7 +1596,14 @@ def __getattr__(self, _):\n \n \n @pytest.mark.parametrize(  # pragma: no branch (lambdas are not called)\n-    \"stop\", [None, _is_mocked, lambda f: None, lambda f: False, lambda f: True]\n+    \"stop\",\n+    [\n+        None,\n+        pytest.param(_is_mocked, id=\"is_mocked\"),\n+        pytest.param(lambda f: None, id=\"lambda_none\"),\n+        pytest.param(lambda f: False, id=\"lambda_false\"),\n+        pytest.param(lambda f: True, id=\"lambda_true\"),\n+    ],\n )\n def test_warning_on_unwrap_of_broken_object(\n     stop: Callable[[object], object] | None,"
+    },
+    {
+      "sha": "1e3c769347c7dee57b864f83dfd382c6f3ae0372",
+      "filename": "testing/test_mark_expression.py",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 1,
+      "changes": 1,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48/testing%2Ftest_mark_expression.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48/testing%2Ftest_mark_expression.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_mark_expression.py?ref=5df54c6de87497fe8ff3a8b5e8c7b3a45411ee48",
+      "patch": "@@ -20,7 +20,6 @@ def test_empty_is_false() -> None:\n @pytest.mark.parametrize(\n     (\"expr\", \"expected\"),\n     (\n-        (\"true\", True),\n         (\"true\", True),\n         (\"false\", False),\n         (\"not true\", False),"
+    }
+  ],
+  "ground_truth": [
+    {
+      "path": "doc/en/reference/reference.rst",
+      "line": 2226,
+      "body": "```suggestion\r\n                            If pytest generates non-unique parameter ids, raise an\r\n                            error rather than fixing this.  Useful if you collect in one\r\n                            process, and then execute tests in independent workers.\r\n```"
+    },
+    {
+      "path": "doc/en/reference/reference.rst",
+      "line": 2226,
+      "body": "Note that this section is auto-generated, the text change should be done in  `src/_pytest/main.py`, in `group.addoption`."
+    },
+    {
+      "path": "changelog/13737.feature.rst",
+      "line": 3,
+      "body": "```suggestion\nAdded the ``--require-unique-paramset-ids`` flag to pytest. \n\nWhen passed, this flag causes pytest to raise an exception upon detection of non-unique parameter set IDs, rather than attempting to generate them automatically.\n```"
+    },
+    {
+      "path": "changelog/13737.feature.rst",
+      "line": 3,
+      "body": "Could we enrich this entry with examples where this is useful? The issue mentions \"for example, when plugins are doing fancy collection tricks and then a subsequent run tries to select a subset of those nodeids\", something like that."
+    },
+    {
+      "path": "src/_pytest/main.py",
+      "line": 98,
+      "body": "```suggestion\n        help=\"Causes pytest to raise an exception upon detection of non-unique parameter set IDs, rather than attempting to generate them automatically.\"\n```"
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 915,
+      "body": "```suggestion\n                    Because --require-unique-paramset-ids given, pytest won't\n```"
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 914,
+      "body": "`Exception` will show this message as an ugly internal error, with a long traceback showing pytest's internals. I think raising `UsageError` will provide a better message."
+    },
+    {
+      "path": "testing/test_collection.py",
+      "line": 2049,
+      "body": "Could we use another parametrized argument here *without* duplicates to ensure the message handles it correctly?"
+    },
+    {
+      "path": "src/_pytest/main.py",
+      "line": 98,
+      "body": "This needs to match the docs in `reference.rst`"
+    },
+    {
+      "path": "testing/test_collection.py",
+      "line": 2042,
+      "body": "I find the argument names and `expected_indexs` hard to read; how about we define a helper function:\r\n\r\n```python\r\ndef fnmatch_escape_repr(obj):\r\n    return re.sub(r\"[*?[\\]]\", (lambda m: \"[{}]\".format(m.group())), repr(obj))\r\n```"
+    },
+    {
+      "path": "testing/test_collection.py",
+      "line": 2060,
+      "body": "```suggestion\n            \"E*Because --require-unique-paramset-ids given, pytest won't\",\n```"
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 906,
+      "body": "```suggestion\n            if self.config and self.config.getoption(\n```"
+    },
+    {
+      "path": "changelog/13737.feature.rst",
+      "line": 4,
+      "body": "```suggestion\r\nrather than automatically modifying the ids to ensure uniqueness.\r\n```"
+    },
+    {
+      "path": "doc/en/reference/reference.rst",
+      "line": 2090,
+      "body": "```suggestion\r\n    Can also be set by passing `--require-unique-paramset-ids`.\r\n```\r\n(\"overridden\" implies to me that you could set it to `False`, which is not the case)"
+    },
+    {
+      "path": "doc/en/reference/reference.rst",
+      "line": 2107,
+      "body": "```suggestion\r\n    Otherwise, pytest would handle this by generating unique IDs like \"a0\", \"a1\".\r\n```"
+    },
+    {
+      "path": "changelog/13737.feature.rst",
+      "line": 1,
+      "body": "```suggestion\nAdded the ``--require-unique-paramset-ids`` command-line flag and :confval:`require_unique_paramset_ids` configuration option to pytest.\n```"
+    },
+    {
+      "path": "changelog/13737.feature.rst",
+      "line": 4,
+      "body": "```suggestion\nrather than automatically modifying the IDs to ensure uniqueness.\n```"
+    },
+    {
+      "path": "doc/en/reference/reference.rst",
+      "line": 2088,
+      "body": "```suggestion\n    than automatically modifying the IDs to ensure uniqueness.\n```"
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 913,
+      "body": "`UsageError` is not quite right here, it is not handled during collection, so the error looks like line an internal error:\n\n<img width=\"1338\" height=\"950\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/2e399894-f1a6-4e85-9ec4-99855cfb52cf\" />\n\nIf you change this to raise `nodes.Collector.CollectError`, then it's handled and the error is just displayed directly:\n\n<img width=\"1301\" height=\"475\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/92a6e313-38b6-41b2-80d9-54640cae37dc\" />"
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 913,
+      "body": "Let's update the docstring to mention this error is possible if the flag is used."
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 913,
+      "body": "Should use `textwrap.dedent` on the error message, otherwise it is displayed with the indentation."
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 918,
+      "body": "Function name is redundant with test name, would remove it."
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 915,
+      "body": "Should let the terminal wrap the message, so remove the line break here."
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 916,
+      "body": "This shows the ParameterSet repr, which is not really meant to be displayed to users. Consider just showing the values. And perhaps use `saferepr` on the values as well."
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 915,
+      "body": "Perhaps make it sound more error like. Something like:\n\nThe test has multiple parameter sets with the same ID, but `--require-unique-paramset-ids` is set.\n\nA second sentence can maybe explain how to resolve the problem."
+    },
+    {
+      "path": "doc/en/reference/reference.rst",
+      "line": 2085,
+      "body": "\"paramset\" is a bit obscure. I would spell it fully: `require_unique_parameter_set_ids`. Or perhaps `require_unique_parameterization_ids` which would probably be understandable to more people. "
+    },
+    {
+      "path": "changelog/13737.feature.rst",
+      "line": 3,
+      "body": "Instead of \"raise an exception\", which is the mechanism, let's write \"emit an error\", which is the outcome."
+    },
+    {
+      "path": "testing/test_collection.py",
+      "line": 2717,
+      "body": "I would inline this helper, it's easier to read directly IMO"
+    },
+    {
+      "path": "testing/test_collection.py",
+      "line": 2722,
+      "body": "Do you intentionally put `y` before `x`? Not that it matters just unusual :)"
+    },
+    {
+      "path": "testing/test_collection.py",
+      "line": 2733,
+      "body": "I don't understand this comment, can you explain?"
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 919,
+      "body": "I'd reorder the lines a bit:\n\n - test name\n - argument names\n - argument values\n - IDs\n - duplicates"
+    },
+    {
+      "path": "testing/test_collection.py",
+      "line": 2733,
+      "body": "left over from old code i removed it."
+    },
+    {
+      "path": "testing/test_collection.py",
+      "line": 2722,
+      "body": "no just happened"
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 913,
+      "body": "Thank you this looks a lot better now; something was boarding me about it but I just couldn't point my finger on it until your suggestion"
+    },
+    {
+      "path": "testing/test_collection.py",
+      "line": 2708,
+      "body": "```suggestion\nclass TestRequireUniqueParametrizationtIds:\n```"
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 928,
+      "body": "It's customary to put the dedent call around the string itself, i.e. `error_msg = textwrap.dedent(f\"\"\"...`."
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 913,
+      "body": "Typo in the variable name"
+    },
+    {
+      "path": "changelog/13737.feature.rst",
+      "line": 1,
+      "body": "Pytest uses the \"parametrization\" spelling (only one e). Should change this everywhere,"
+    },
+    {
+      "path": "changelog/13737.feature.rst",
+      "line": 4,
+      "body": "You marked the previous comment as resolved but didn't change anything, did you disagree with it?\n\nIn any case I'd write it like this:\n\n\n```suggestion\nWhen passed, pytest will emit an error if it detects non-unique parameter set IDs,\nrather than automatically making the IDs unique by adding `0`, `1`, ... to them.\n```\n\nThis text repeats also in a few places below, should make them consistent."
+    },
+    {
+      "path": "changelog/13737.feature.rst",
+      "line": 1,
+      "body": "This is the pytest changelog so \"to pytest\" is not necessary.\n\n```suggestion\nAdded the ``--require-unique-parameterization-ids`` command-line flag and :confval:`require_unique_parameterization_ids` configuration option.\n```"
+    },
+    {
+      "path": "doc/en/reference/reference.rst",
+      "line": 2107,
+      "body": "(This comment is not resolved)"
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 926,
+      "body": "Here's how I'd write it:\n\n```suggestion\n                    Duplicate parametrization IDs detected, but --require-unique-parameterization-ids is set.\n\n                    Test name: {self.nodeid}\n                    Argument names: {self.argnames}\n                    Argument values: {arugment_values}\n                    Resolved IDs: {resolved_ids}\n                    Duplicates: {duplicates}\n\n                    You can fix this problem using the `ids` argument of `@pytest.mark.parametrize()` or the `id` argument of `pytest.param()`.\n```"
+    },
+    {
+      "path": "testing/test_collection.py",
+      "line": 2709,
+      "body": "Would put this right above `test_cli_enables` so it's closer to where it's used."
+    },
+    {
+      "path": "testing/test_collection.py",
+      "line": 2736,
+      "body": "The `\"x,y\"` syntax is ~sort of legacy, better to write them out as separate strings:\n\n```suggestion\n    @pytest.mark.parametrize((\"parametrize_args\", \"expected_indices\"), CASES)\n```"
+    },
+    {
+      "path": "testing/test_collection.py",
+      "line": 2737,
+      "body": "Let's add type annotations:\n\n```suggestion\n    def test_cli_enables(self, pytester: Pytester, parametrize_args: str, expected_indices: Sequence[int]) -> None:\n```"
+    },
+    {
+      "path": "testing/test_collection.py",
+      "line": 2770,
+      "body": "```suggestion\n    def test_cli_overrides_ini_false(self, pytester: Pytester) -> None:\n```"
+    },
+    {
+      "path": "testing/test_collection.py",
+      "line": 2742,
+      "body": "Can you swap the x and y?"
+    },
+    {
+      "path": "doc/en/reference/reference.rst",
+      "line": 2107,
+      "body": "your right, i missed it.\r\nshould be resolved now"
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 927,
+      "body": "not a blocker or a reason not to merge.\nthis is a pattern that does repeat itself a few times in the code \n`id if id is not HIDDEN_PARAM else \"<hidden>\"` "
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 927,
+      "body": "I use https://en.wikipedia.org/wiki/Rule_of_three_(computer_programming) for this :)\r\n\r\nIt's a little repetition but close together and unlikely to get out of sync. So I prefer making the code more readable."
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 927,
+      "body": "Haha i like it 2 is just under 3 haha"
+    }
+  ]
+}

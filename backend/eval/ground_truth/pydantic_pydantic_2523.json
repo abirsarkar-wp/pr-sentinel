@@ -1,0 +1,57 @@
+{
+  "repo": "pydantic/pydantic",
+  "pr_number": 2523,
+  "title": "Allow passing json_encoders in class kwargs",
+  "body": "<!-- Thank you for your contribution! -->\r\n<!-- Unless your change is trivial, please create an issue to discuss the change before creating a PR -->\r\n<!-- See https://pydantic-docs.helpmanual.io/contributing/ for help on Contributing -->\r\n\r\n## Change Summary\r\n\r\nAllow passing `json_encoders` in class kwargs.\r\n\r\n## Related issue number\r\n\r\ncloses #2521 \r\n\r\n## Checklist\r\n\r\n* [x] Unit tests for the changes exist\r\n* [x] Tests pass on CI and coverage remains at 100%\r\n* [x] Documentation reflects the changes where applicable\r\n* [x] `changes/<pull request or issue id>-<github username>.md` file added describing change\r\n  (see [changes/README.md](https://github.com/samuelcolvin/pydantic/blob/master/changes/README.md) for details)\r\n",
+  "head_sha": "f1c8ee5a76532d6bea9741f72452e0f972773644",
+  "files": [
+    {
+      "sha": "3c02f4dfd6085794a31f30c811d147357465ffa6",
+      "filename": "changes/2521-layday.md",
+      "status": "added",
+      "additions": 1,
+      "deletions": 0,
+      "changes": 1,
+      "blob_url": "https://github.com/pydantic/pydantic/blob/f1c8ee5a76532d6bea9741f72452e0f972773644/changes%2F2521-layday.md",
+      "raw_url": "https://github.com/pydantic/pydantic/raw/f1c8ee5a76532d6bea9741f72452e0f972773644/changes%2F2521-layday.md",
+      "contents_url": "https://api.github.com/repos/pydantic/pydantic/contents/changes%2F2521-layday.md?ref=f1c8ee5a76532d6bea9741f72452e0f972773644",
+      "patch": "@@ -0,0 +1 @@\n+Allow passing `json_encoders` in class kwargs"
+    },
+    {
+      "sha": "37f005af87d97a130205f84f5d5e16d567195251",
+      "filename": "pydantic/main.py",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 0,
+      "changes": 1,
+      "blob_url": "https://github.com/pydantic/pydantic/blob/f1c8ee5a76532d6bea9741f72452e0f972773644/pydantic%2Fmain.py",
+      "raw_url": "https://github.com/pydantic/pydantic/raw/f1c8ee5a76532d6bea9741f72452e0f972773644/pydantic%2Fmain.py",
+      "contents_url": "https://api.github.com/repos/pydantic/pydantic/contents/pydantic%2Fmain.py?ref=f1c8ee5a76532d6bea9741f72452e0f972773644",
+      "patch": "@@ -184,6 +184,7 @@ def inherit_config(self_config: 'ConfigType', parent_config: 'ConfigType', **nam\n     namespace['json_encoders'] = {\n         **getattr(parent_config, 'json_encoders', {}),\n         **getattr(self_config, 'json_encoders', {}),\n+        **namespace.get('json_encoders', {}),\n     }\n \n     return type('Config', base_classes, namespace)"
+    },
+    {
+      "sha": "d2180c9e7350935e44ff9dd3dd4f2fb736e69652",
+      "filename": "tests/test_main.py",
+      "status": "modified",
+      "additions": 7,
+      "deletions": 0,
+      "changes": 7,
+      "blob_url": "https://github.com/pydantic/pydantic/blob/f1c8ee5a76532d6bea9741f72452e0f972773644/tests%2Ftest_main.py",
+      "raw_url": "https://github.com/pydantic/pydantic/raw/f1c8ee5a76532d6bea9741f72452e0f972773644/tests%2Ftest_main.py",
+      "contents_url": "https://api.github.com/repos/pydantic/pydantic/contents/tests%2Ftest_main.py?ref=f1c8ee5a76532d6bea9741f72452e0f972773644",
+      "patch": "@@ -1723,6 +1723,13 @@ class Model(Base, extra='allow'):\n     assert Model.__fields__['b'].alias == 'B'  # alias_generator still works\n \n \n+def test_class_kwargs_config_json_encoders():\n+    class Model(BaseModel, json_encoders={int: str}):\n+        pass\n+\n+    assert Model.__config__.json_encoders == {int: str}\n+\n+\n def test_class_kwargs_config_and_attr_conflict():\n \n     with pytest.raises("
+    }
+  ],
+  "ground_truth": [
+    {
+      "path": "changes/2521-layday.md",
+      "line": 1,
+      "body": "```suggestion\r\nAllow passing `json_encoders` in class kwargs\r\n```\r\n\r\nIssue get's automatically added to the line in history."
+    },
+    {
+      "path": "changes/2521-layday.md",
+      "line": 1,
+      "body": "done"
+    }
+  ]
+}

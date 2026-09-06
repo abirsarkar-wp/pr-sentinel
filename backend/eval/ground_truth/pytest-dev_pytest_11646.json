@@ -1,0 +1,714 @@
+{
+  "repo": "pytest-dev/pytest",
+  "pr_number": 11646,
+  "title": "Rework Session and Package collection ",
+  "body": "This PR implements the proposals in #7777. ",
+  "head_sha": "e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+  "files": [
+    {
+      "sha": "d38fea3309642e8a73fde1692d14db0c65fa3a1d",
+      "filename": "changelog/7777.breaking.rst",
+      "status": "added",
+      "additions": 90,
+      "deletions": 0,
+      "changes": 90,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/changelog%2F7777.breaking.rst",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/changelog%2F7777.breaking.rst",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/changelog%2F7777.breaking.rst?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -0,0 +1,90 @@\n+Added a new :class:`pytest.Directory` base collection node, which all collector nodes for filesystem directories are expected to subclass.\n+This is analogous to the existing :class:`pytest.File` for file nodes.\n+\n+Changed :class:`pytest.Package` to be a subclass of :class:`pytest.Directory`.\n+A ``Package`` represents a filesystem directory which is a Python package,\n+i.e. contains an ``__init__.py`` file.\n+\n+:class:`pytest.Package` now only collects files in its own directory; previously it collected recursively.\n+Sub-directories are collected as sub-collector nodes, thus creating a collection tree which mirrors the filesystem hierarchy.\n+\n+Added a new :class:`pytest.Dir` concrete collection node, a subclass of :class:`pytest.Directory`.\n+This node represents a filesystem directory, which is not a :class:`pytest.Package`,\n+i.e. does not contain an ``__init__.py`` file.\n+Similarly to ``Package``, it only collects the files in its own directory,\n+while collecting sub-directories as sub-collector nodes.\n+\n+Added a new hook :hook:`pytest_collect_directory`,\n+which is called by filesystem-traversing collector nodes,\n+such as :class:`pytest.Session`, :class:`pytest.Dir` and :class:`pytest.Package`,\n+to create a collector node for a sub-directory.\n+It is expected to return a subclass of :class:`pytest.Directory`.\n+This hook allows plugins to :ref:`customize the collection of directories <custom directory collectors>`.\n+\n+:class:`pytest.Session` now only collects the initial arguments, without recursing into directories.\n+This work is now done by the :func:`recursive expansion process <pytest.Collector.collect>` of directory collector nodes.\n+\n+:attr:`session.name <pytest.Session.name>` is now ``\"\"``; previously it was the rootdir directory name.\n+This matches :attr:`session.nodeid <_pytest.nodes.Node.nodeid>` which has always been `\"\"`.\n+\n+Files and directories are now collected in alphabetical order jointly, unless changed by a plugin.\n+Previously, files were collected before directories.\n+\n+The collection tree now contains directories/packages up to the :ref:`rootdir <rootdir>`,\n+for initial arguments that are found within the rootdir.\n+For files outside the rootdir, only the immediate directory/package is collected --\n+note however that collecting from outside the rootdir is discouraged.\n+\n+As an example, given the following filesystem tree::\n+\n+    myroot/\n+        pytest.ini\n+        top/\n+        \u251c\u2500\u2500 aaa\n+        \u2502   \u2514\u2500\u2500 test_aaa.py\n+        \u251c\u2500\u2500 test_a.py\n+        \u251c\u2500\u2500 test_b\n+        \u2502   \u251c\u2500\u2500 __init__.py\n+        \u2502   \u2514\u2500\u2500 test_b.py\n+        \u251c\u2500\u2500 test_c.py\n+        \u2514\u2500\u2500 zzz\n+            \u251c\u2500\u2500 __init__.py\n+            \u2514\u2500\u2500 test_zzz.py\n+\n+the collection tree, as shown by `pytest --collect-only top/` but with the otherwise-hidden :class:`~pytest.Session` node added for clarity,\n+is now the following::\n+\n+    <Session>\n+      <Dir myroot>\n+        <Dir top>\n+          <Dir aaa>\n+            <Module test_aaa.py>\n+              <Function test_it>\n+          <Module test_a.py>\n+            <Function test_it>\n+          <Package test_b>\n+            <Module test_b.py>\n+              <Function test_it>\n+          <Module test_c.py>\n+            <Function test_it>\n+          <Package zzz>\n+            <Module test_zzz.py>\n+              <Function test_it>\n+\n+Previously, it was::\n+\n+    <Session>\n+      <Module top/test_a.py>\n+        <Function test_it>\n+      <Module top/test_c.py>\n+        <Function test_it>\n+      <Module top/aaa/test_aaa.py>\n+        <Function test_it>\n+      <Package test_b>\n+        <Module test_b.py>\n+          <Function test_it>\n+      <Package zzz>\n+        <Module test_zzz.py>\n+          <Function test_it>\n+\n+Code/plugins which rely on a specific shape of the collection tree might need to update."
+    },
+    {
+      "sha": "caa7cb3e760599bcd38af7c57ad284209316f65f",
+      "filename": "doc/en/deprecations.rst",
+      "status": "modified",
+      "additions": 85,
+      "deletions": 0,
+      "changes": 85,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/doc%2Fen%2Fdeprecations.rst",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/doc%2Fen%2Fdeprecations.rst",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/doc%2Fen%2Fdeprecations.rst?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -495,6 +495,91 @@ an appropriate period of deprecation has passed.\n Some breaking changes which could not be deprecated are also listed.\n \n \n+Collection changes in pytest 8\n+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n+\n+Added a new :class:`pytest.Directory` base collection node, which all collector nodes for filesystem directories are expected to subclass.\n+This is analogous to the existing :class:`pytest.File` for file nodes.\n+\n+Changed :class:`pytest.Package` to be a subclass of :class:`pytest.Directory`.\n+A ``Package`` represents a filesystem directory which is a Python package,\n+i.e. contains an ``__init__.py`` file.\n+\n+:class:`pytest.Package` now only collects files in its own directory; previously it collected recursively.\n+Sub-directories are collected as sub-collector nodes, thus creating a collection tree which mirrors the filesystem hierarchy.\n+\n+:attr:`session.name <pytest.Session.name>` is now ``\"\"``; previously it was the rootdir directory name.\n+This matches :attr:`session.nodeid <_pytest.nodes.Node.nodeid>` which has always been `\"\"`.\n+\n+Added a new :class:`pytest.Dir` concrete collection node, a subclass of :class:`pytest.Directory`.\n+This node represents a filesystem directory, which is not a :class:`pytest.Package`,\n+i.e. does not contain an ``__init__.py`` file.\n+Similarly to ``Package``, it only collects the files in its own directory,\n+while collecting sub-directories as sub-collector nodes.\n+\n+Files and directories are now collected in alphabetical order jointly, unless changed by a plugin.\n+Previously, files were collected before directories.\n+\n+The collection tree now contains directories/packages up to the :ref:`rootdir <rootdir>`,\n+for initial arguments that are found within the rootdir.\n+For files outside the rootdir, only the immediate directory/package is collected --\n+note however that collecting from outside the rootdir is discouraged.\n+\n+As an example, given the following filesystem tree::\n+\n+    myroot/\n+        pytest.ini\n+        top/\n+        \u251c\u2500\u2500 aaa\n+        \u2502   \u2514\u2500\u2500 test_aaa.py\n+        \u251c\u2500\u2500 test_a.py\n+        \u251c\u2500\u2500 test_b\n+        \u2502   \u251c\u2500\u2500 __init__.py\n+        \u2502   \u2514\u2500\u2500 test_b.py\n+        \u251c\u2500\u2500 test_c.py\n+        \u2514\u2500\u2500 zzz\n+            \u251c\u2500\u2500 __init__.py\n+            \u2514\u2500\u2500 test_zzz.py\n+\n+the collection tree, as shown by `pytest --collect-only top/` but with the otherwise-hidden :class:`~pytest.Session` node added for clarity,\n+is now the following::\n+\n+    <Session>\n+      <Dir myroot>\n+        <Dir top>\n+          <Dir aaa>\n+            <Module test_aaa.py>\n+              <Function test_it>\n+          <Module test_a.py>\n+            <Function test_it>\n+          <Package test_b>\n+            <Module test_b.py>\n+              <Function test_it>\n+          <Module test_c.py>\n+            <Function test_it>\n+          <Package zzz>\n+            <Module test_zzz.py>\n+              <Function test_it>\n+\n+Previously, it was::\n+\n+    <Session>\n+      <Module top/test_a.py>\n+        <Function test_it>\n+      <Module top/test_c.py>\n+        <Function test_it>\n+      <Module top/aaa/test_aaa.py>\n+        <Function test_it>\n+      <Package test_b>\n+        <Module test_b.py>\n+          <Function test_it>\n+      <Package zzz>\n+        <Module test_zzz.py>\n+          <Function test_it>\n+\n+Code/plugins which rely on a specific shape of the collection tree might need to update.\n+\n+\n :class:`pytest.Package` is no longer a :class:`pytest.Module` or :class:`pytest.File`\n ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n "
+    },
+    {
+      "sha": "66e70f14dd713766a8f0476bb38f2f6520d40b19",
+      "filename": "doc/en/example/conftest.py",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "changes": 2,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/doc%2Fen%2Fexample%2Fconftest.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/doc%2Fen%2Fexample%2Fconftest.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/doc%2Fen%2Fexample%2Fconftest.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -1 +1 @@\n-collect_ignore = [\"nonpython\"]\n+collect_ignore = [\"nonpython\", \"customdirectory\"]"
+    },
+    {
+      "sha": "1e4d7e370de299b6af6019d7d8473f2deafa04fe",
+      "filename": "doc/en/example/customdirectory.rst",
+      "status": "added",
+      "additions": 77,
+      "deletions": 0,
+      "changes": 77,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/doc%2Fen%2Fexample%2Fcustomdirectory.rst",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/doc%2Fen%2Fexample%2Fcustomdirectory.rst",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/doc%2Fen%2Fexample%2Fcustomdirectory.rst?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -0,0 +1,77 @@\n+.. _`custom directory collectors`:\n+\n+Using a custom directory collector\n+====================================================\n+\n+By default, pytest collects directories using :class:`pytest.Package`, for directories with ``__init__.py`` files,\n+and :class:`pytest.Dir` for other directories.\n+If you want to customize how a directory is collected, you can write your own :class:`pytest.Directory` collector,\n+and use :hook:`pytest_collect_directory` to hook it up.\n+\n+.. _`directory manifest plugin`:\n+\n+A basic example for a directory manifest file\n+--------------------------------------------------------------\n+\n+Suppose you want to customize how collection is done on a per-directory basis.\n+Here is an example ``conftest.py`` plugin that allows directories to contain a ``manifest.json`` file,\n+which defines how the collection should be done for the directory.\n+In this example, only a simple list of files is supported,\n+however you can imagine adding other keys, such as exclusions and globs.\n+\n+.. include:: customdirectory/conftest.py\n+    :literal:\n+\n+You can create a ``manifest.json`` file and some test files:\n+\n+.. include:: customdirectory/tests/manifest.json\n+    :literal:\n+\n+.. include:: customdirectory/tests/test_first.py\n+    :literal:\n+\n+.. include:: customdirectory/tests/test_second.py\n+    :literal:\n+\n+.. include:: customdirectory/tests/test_third.py\n+    :literal:\n+\n+An you can now execute the test specification:\n+\n+.. code-block:: pytest\n+\n+    customdirectory $ pytest\n+    =========================== test session starts ============================\n+    platform linux -- Python 3.x.y, pytest-8.x.y, pluggy-1.x.y\n+    rootdir: /home/sweet/project/customdirectory\n+    configfile: pytest.ini\n+    collected 2 items\n+\n+    tests/test_first.py .                                                [ 50%]\n+    tests/test_second.py .                                               [100%]\n+\n+    ============================ 2 passed in 0.12s =============================\n+\n+.. regendoc:wipe\n+\n+Notice how ``test_three.py`` was not executed, because it is not listed in the manifest.\n+\n+You can verify that your custom collector appears in the collection tree:\n+\n+.. code-block:: pytest\n+\n+    customdirectory $ pytest --collect-only\n+    =========================== test session starts ============================\n+    platform linux -- Python 3.x.y, pytest-8.x.y, pluggy-1.x.y\n+    rootdir: /home/sweet/project/customdirectory\n+    configfile: pytest.ini\n+    collected 2 items\n+\n+    <Dir customdirectory>\n+      <ManifestDirectory tests>\n+        <Module test_first.py>\n+          <Function test_1>\n+        <Module test_second.py>\n+          <Function test_2>\n+\n+    ======================== 2 tests collected in 0.12s ========================"
+    },
+    {
+      "sha": "350893cab4361376bae2df7e2dcd52f99f19b0c6",
+      "filename": "doc/en/example/customdirectory/conftest.py",
+      "status": "added",
+      "additions": 28,
+      "deletions": 0,
+      "changes": 28,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/doc%2Fen%2Fexample%2Fcustomdirectory%2Fconftest.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/doc%2Fen%2Fexample%2Fcustomdirectory%2Fconftest.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/doc%2Fen%2Fexample%2Fcustomdirectory%2Fconftest.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -0,0 +1,28 @@\n+# content of conftest.py\n+import json\n+\n+import pytest\n+\n+\n+class ManifestDirectory(pytest.Directory):\n+    def collect(self):\n+        # The standard pytest behavior is to loop over all `test_*.py` files and\n+        # call `pytest_collect_file` on each file. This collector instead reads\n+        # the `manifest.json` file and only calls `pytest_collect_file` for the\n+        # files defined there.\n+        manifest_path = self.path / \"manifest.json\"\n+        manifest = json.loads(manifest_path.read_text(encoding=\"utf-8\"))\n+        ihook = self.ihook\n+        for file in manifest[\"files\"]:\n+            yield from ihook.pytest_collect_file(\n+                file_path=self.path / file, parent=self\n+            )\n+\n+\n+@pytest.hookimpl\n+def pytest_collect_directory(path, parent):\n+    # Use our custom collector for directories containing a `mainfest.json` file.\n+    if path.joinpath(\"manifest.json\").is_file():\n+        return ManifestDirectory.from_parent(parent=parent, path=path)\n+    # Otherwise fallback to the standard behavior.\n+    return None"
+    },
+    {
+      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "filename": "doc/en/example/customdirectory/pytest.ini",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0,
+      "changes": 0,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/doc%2Fen%2Fexample%2Fcustomdirectory%2Fpytest.ini",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/doc%2Fen%2Fexample%2Fcustomdirectory%2Fpytest.ini",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/doc%2Fen%2Fexample%2Fcustomdirectory%2Fpytest.ini?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39"
+    },
+    {
+      "sha": "6ab6d0a522269fbe85a7a0fb9450a11b17ebc5ab",
+      "filename": "doc/en/example/customdirectory/tests/manifest.json",
+      "status": "added",
+      "additions": 6,
+      "deletions": 0,
+      "changes": 6,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/doc%2Fen%2Fexample%2Fcustomdirectory%2Ftests%2Fmanifest.json",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/doc%2Fen%2Fexample%2Fcustomdirectory%2Ftests%2Fmanifest.json",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/doc%2Fen%2Fexample%2Fcustomdirectory%2Ftests%2Fmanifest.json?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -0,0 +1,6 @@\n+{\n+    \"files\": [\n+        \"test_first.py\",\n+        \"test_second.py\"\n+    ]\n+}"
+    },
+    {
+      "sha": "0a78de59945d3ab99f3659d9d1a554a973bb9d78",
+      "filename": "doc/en/example/customdirectory/tests/test_first.py",
+      "status": "added",
+      "additions": 3,
+      "deletions": 0,
+      "changes": 3,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/doc%2Fen%2Fexample%2Fcustomdirectory%2Ftests%2Ftest_first.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/doc%2Fen%2Fexample%2Fcustomdirectory%2Ftests%2Ftest_first.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/doc%2Fen%2Fexample%2Fcustomdirectory%2Ftests%2Ftest_first.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -0,0 +1,3 @@\n+# content of test_first.py\n+def test_1():\n+    pass"
+    },
+    {
+      "sha": "eed724a7d969fe6e95874d2b86d85e22419b2285",
+      "filename": "doc/en/example/customdirectory/tests/test_second.py",
+      "status": "added",
+      "additions": 3,
+      "deletions": 0,
+      "changes": 3,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/doc%2Fen%2Fexample%2Fcustomdirectory%2Ftests%2Ftest_second.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/doc%2Fen%2Fexample%2Fcustomdirectory%2Ftests%2Ftest_second.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/doc%2Fen%2Fexample%2Fcustomdirectory%2Ftests%2Ftest_second.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -0,0 +1,3 @@\n+# content of test_second.py\n+def test_2():\n+    pass"
+    },
+    {
+      "sha": "61cf59dc16c2a51e85e0c48c2bf570de4fdb49b3",
+      "filename": "doc/en/example/customdirectory/tests/test_third.py",
+      "status": "added",
+      "additions": 3,
+      "deletions": 0,
+      "changes": 3,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/doc%2Fen%2Fexample%2Fcustomdirectory%2Ftests%2Ftest_third.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/doc%2Fen%2Fexample%2Fcustomdirectory%2Ftests%2Ftest_third.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/doc%2Fen%2Fexample%2Fcustomdirectory%2Ftests%2Ftest_third.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -0,0 +1,3 @@\n+# content of test_third.py\n+def test_3():\n+    pass"
+    },
+    {
+      "sha": "e8835aae9d34a2225d922cf353c20c4ae7043e4c",
+      "filename": "doc/en/example/index.rst",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 0,
+      "changes": 1,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/doc%2Fen%2Fexample%2Findex.rst",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/doc%2Fen%2Fexample%2Findex.rst",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/doc%2Fen%2Fexample%2Findex.rst?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -32,3 +32,4 @@ The following examples aim at various use cases you might encounter.\n    special\n    pythoncollection\n    nonpython\n+   customdirectory"
+    },
+    {
+      "sha": "a360e16120cc6e4c9348a20c51754d8984607b89",
+      "filename": "doc/en/reference/reference.rst",
+      "status": "modified",
+      "additions": 14,
+      "deletions": 0,
+      "changes": 14,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/doc%2Fen%2Freference%2Freference.rst",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/doc%2Fen%2Freference%2Freference.rst",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/doc%2Fen%2Freference%2Freference.rst?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -682,6 +682,8 @@ Collection hooks\n .. autofunction:: pytest_collection\n .. hook:: pytest_ignore_collect\n .. autofunction:: pytest_ignore_collect\n+.. hook:: pytest_collect_directory\n+.. autofunction:: pytest_collect_directory\n .. hook:: pytest_collect_file\n .. autofunction:: pytest_collect_file\n .. hook:: pytest_pycollect_makemodule\n@@ -921,6 +923,18 @@ Config\n .. autoclass:: pytest.Config()\n     :members:\n \n+Dir\n+~~~\n+\n+.. autoclass:: pytest.Dir()\n+    :members:\n+\n+Directory\n+~~~~~~~~~\n+\n+.. autoclass:: pytest.Directory()\n+    :members:\n+\n ExceptionInfo\n ~~~~~~~~~~~~~\n "
+    },
+    {
+      "sha": "793e796de6960d25f68585fc0ae1a64d8003be82",
+      "filename": "src/_pytest/cacheprovider.py",
+      "status": "modified",
+      "additions": 2,
+      "deletions": 2,
+      "changes": 4,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/src%2F_pytest%2Fcacheprovider.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/src%2F_pytest%2Fcacheprovider.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/src%2F_pytest%2Fcacheprovider.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -27,8 +27,8 @@\n from _pytest.fixtures import fixture\n from _pytest.fixtures import FixtureRequest\n from _pytest.main import Session\n+from _pytest.nodes import Directory\n from _pytest.nodes import File\n-from _pytest.python import Package\n from _pytest.reports import TestReport\n \n README_CONTENT = \"\"\"\\\n@@ -222,7 +222,7 @@ def pytest_make_collect_report(\n         self, collector: nodes.Collector\n     ) -> Generator[None, CollectReport, CollectReport]:\n         res = yield\n-        if isinstance(collector, (Session, Package)):\n+        if isinstance(collector, (Session, Directory)):\n             # Sort any lf-paths to the beginning.\n             lf_paths = self.lfplugin._last_failed_paths\n "
+    },
+    {
+      "sha": "e5775546ddeb4dcdb04345c03c1670209c75bb2e",
+      "filename": "src/_pytest/config/__init__.py",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 2,
+      "changes": 2,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/src%2F_pytest%2Fconfig%2F__init__.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/src%2F_pytest%2Fconfig%2F__init__.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/src%2F_pytest%2Fconfig%2F__init__.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -415,8 +415,6 @@ def __init__(self) -> None:\n         # session (#9478), often with the same path, so cache it.\n         self._get_directory = lru_cache(256)(_get_directory)\n \n-        self._duplicatepaths: Set[Path] = set()\n-\n         # plugins that were explicitly skipped with pytest.skip\n         # list of (module name, skip reason)\n         # previously we would issue a warning when a plugin was skipped, but"
+    },
+    {
+      "sha": "3c65234daa7867a30764157031e97c0ca4a7d69e",
+      "filename": "src/_pytest/hookspec.py",
+      "status": "modified",
+      "additions": 24,
+      "deletions": 0,
+      "changes": 24,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/src%2F_pytest%2Fhookspec.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/src%2F_pytest%2Fhookspec.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/src%2F_pytest%2Fhookspec.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -284,11 +284,35 @@ def pytest_ignore_collect(\n     \"\"\"\n \n \n+@hookspec(firstresult=True)\n+def pytest_collect_directory(path: Path, parent: \"Collector\") -> \"Optional[Collector]\":\n+    \"\"\"Create a :class:`~pytest.Collector` for the given directory, or None if\n+    not relevant.\n+\n+    .. versionadded:: 8.0\n+\n+    For best results, the returned collector should be a subclass of\n+    :class:`~pytest.Directory`, but this is not required.\n+\n+    The new node needs to have the specified ``parent`` as a parent.\n+\n+    Stops at first non-None result, see :ref:`firstresult`.\n+\n+    :param path: The path to analyze.\n+\n+    See :ref:`custom directory collectors` for a simple example of use of this\n+    hook.\n+    \"\"\"\n+\n+\n def pytest_collect_file(\n     file_path: Path, path: \"LEGACY_PATH\", parent: \"Collector\"\n ) -> \"Optional[Collector]\":\n     \"\"\"Create a :class:`~pytest.Collector` for the given path, or None if not relevant.\n \n+    For best results, the returned collector should be a subclass of\n+    :class:`~pytest.File`, but this is not required.\n+\n     The new node needs to have the specified ``parent`` as a parent.\n \n     :param file_path: The path to analyze."
+    },
+    {
+      "sha": "3672df05a0126f2c3f58944849fa1e1868a9fc8c",
+      "filename": "src/_pytest/main.py",
+      "status": "modified",
+      "additions": 231,
+      "deletions": 171,
+      "changes": 402,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/src%2F_pytest%2Fmain.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/src%2F_pytest%2Fmain.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/src%2F_pytest%2Fmain.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -12,15 +12,14 @@\n from typing import Dict\n from typing import final\n from typing import FrozenSet\n+from typing import Iterable\n from typing import Iterator\n from typing import List\n from typing import Literal\n from typing import Optional\n from typing import overload\n from typing import Sequence\n from typing import Tuple\n-from typing import Type\n-from typing import TYPE_CHECKING\n from typing import Union\n \n import pluggy\n@@ -41,17 +40,13 @@\n from _pytest.pathlib import bestrelpath\n from _pytest.pathlib import fnmatch_ex\n from _pytest.pathlib import safe_exists\n-from _pytest.pathlib import visit\n+from _pytest.pathlib import scandir\n from _pytest.reports import CollectReport\n from _pytest.reports import TestReport\n from _pytest.runner import collect_one_node\n from _pytest.runner import SetupState\n \n \n-if TYPE_CHECKING:\n-    from _pytest.python import Package\n-\n-\n def pytest_addoption(parser: Parser) -> None:\n     parser.addini(\n         \"norecursedirs\",\n@@ -414,6 +409,12 @@ def pytest_ignore_collect(collection_path: Path, config: Config) -> Optional[boo\n     return None\n \n \n+def pytest_collect_directory(\n+    path: Path, parent: nodes.Collector\n+) -> Optional[nodes.Collector]:\n+    return Dir.from_parent(parent, path=path)\n+\n+\n def pytest_collection_modifyitems(items: List[nodes.Item], config: Config) -> None:\n     deselect_prefixes = tuple(config.getoption(\"deselect\") or [])\n     if not deselect_prefixes:\n@@ -470,7 +471,60 @@ def __missing__(self, path: Path) -> str:\n \n \n @final\n-class Session(nodes.FSCollector):\n+class Dir(nodes.Directory):\n+    \"\"\"Collector of files in a file system directory.\n+\n+    .. versionadded:: 8.0\n+\n+    .. note::\n+\n+        Python directories with an `__init__.py` file are instead collected by\n+        :class:`~pytest.Package` by default. Both are :class:`~pytest.Directory`\n+        collectors.\n+    \"\"\"\n+\n+    @classmethod\n+    def from_parent(  # type: ignore[override]\n+        cls,\n+        parent: nodes.Collector,  # type: ignore[override]\n+        *,\n+        path: Path,\n+    ) -> \"Dir\":\n+        \"\"\"The public constructor.\n+\n+        :param parent: The parent collector of this Dir.\n+        :param path: The directory's path.\n+        \"\"\"\n+        return super().from_parent(parent=parent, path=path)  # type: ignore[no-any-return]\n+\n+    def collect(self) -> Iterable[Union[nodes.Item, nodes.Collector]]:\n+        config = self.config\n+        col: Optional[nodes.Collector]\n+        cols: Sequence[nodes.Collector]\n+        ihook = self.ihook\n+        for direntry in scandir(self.path):\n+            if direntry.is_dir():\n+                if direntry.name == \"__pycache__\":\n+                    continue\n+                path = Path(direntry.path)\n+                if not self.session.isinitpath(path, with_parents=True):\n+                    if ihook.pytest_ignore_collect(collection_path=path, config=config):\n+                        continue\n+                col = ihook.pytest_collect_directory(path=path, parent=self)\n+                if col is not None:\n+                    yield col\n+\n+            elif direntry.is_file():\n+                path = Path(direntry.path)\n+                if not self.session.isinitpath(path):\n+                    if ihook.pytest_ignore_collect(collection_path=path, config=config):\n+                        continue\n+                cols = ihook.pytest_collect_file(file_path=path, parent=self)\n+                yield from cols\n+\n+\n+@final\n+class Session(nodes.Collector):\n     \"\"\"The root of the collection tree.\n \n     ``Session`` collects the initial paths given as arguments to pytest.\n@@ -486,6 +540,7 @@ class Session(nodes.FSCollector):\n \n     def __init__(self, config: Config) -> None:\n         super().__init__(\n+            name=\"\",\n             path=config.rootpath,\n             fspath=None,\n             parent=None,\n@@ -499,6 +554,11 @@ def __init__(self, config: Config) -> None:\n         self.shouldfail: Union[bool, str] = False\n         self.trace = config.trace.root.get(\"collection\")\n         self._initialpaths: FrozenSet[Path] = frozenset()\n+        self._initialpaths_with_parents: FrozenSet[Path] = frozenset()\n+        self._notfound: List[Tuple[str, Sequence[nodes.Collector]]] = []\n+        self._initial_parts: List[Tuple[Path, List[str]]] = []\n+        self._collection_cache: Dict[nodes.Collector, CollectReport] = {}\n+        self.items: List[nodes.Item] = []\n \n         self._bestrelpathcache: Dict[Path, str] = _bestrelpath_cache(config.rootpath)\n \n@@ -549,26 +609,36 @@ def pytest_runtest_logreport(\n \n     pytest_collectreport = pytest_runtest_logreport\n \n-    def isinitpath(self, path: Union[str, \"os.PathLike[str]\"]) -> bool:\n+    def isinitpath(\n+        self,\n+        path: Union[str, \"os.PathLike[str]\"],\n+        *,\n+        with_parents: bool = False,\n+    ) -> bool:\n+        \"\"\"Is path an initial path?\n+\n+        An initial path is a path explicitly given to pytest on the command\n+        line.\n+\n+        :param with_parents:\n+            If set, also return True if the path is a parent of an initial path.\n+\n+        .. versionchanged:: 8.0\n+            Added the ``with_parents`` parameter.\n+        \"\"\"\n         # Optimization: Path(Path(...)) is much slower than isinstance.\n         path_ = path if isinstance(path, Path) else Path(path)\n-        return path_ in self._initialpaths\n+        if with_parents:\n+            return path_ in self._initialpaths_with_parents\n+        else:\n+            return path_ in self._initialpaths\n \n     def gethookproxy(self, fspath: \"os.PathLike[str]\") -> pluggy.HookRelay:\n         # Optimization: Path(Path(...)) is much slower than isinstance.\n         path = fspath if isinstance(fspath, Path) else Path(fspath)\n         pm = self.config.pluginmanager\n         # Check if we have the common case of running\n         # hooks with all conftest.py files.\n-        #\n-        # TODO: pytest relies on this call to load non-initial conftests. This\n-        # is incidental. It will be better to load conftests at a more\n-        # well-defined place.\n-        pm._loadconftestmodules(\n-            path,\n-            self.config.getoption(\"importmode\"),\n-            rootpath=self.config.rootpath,\n-        )\n         my_conftestmodules = pm._getconftestmodules(path)\n         remove_mods = pm._conftest_plugins.difference(my_conftestmodules)\n         proxy: pluggy.HookRelay\n@@ -580,49 +650,36 @@ def gethookproxy(self, fspath: \"os.PathLike[str]\") -> pluggy.HookRelay:\n             proxy = self.config.hook\n         return proxy\n \n-    def _recurse(self, direntry: \"os.DirEntry[str]\") -> bool:\n-        if direntry.name == \"__pycache__\":\n-            return False\n-        fspath = Path(direntry.path)\n-        ihook = self.gethookproxy(fspath.parent)\n-        if ihook.pytest_ignore_collect(collection_path=fspath, config=self.config):\n-            return False\n-        return True\n-\n-    def _collectpackage(self, fspath: Path) -> Optional[\"Package\"]:\n-        from _pytest.python import Package\n+    def _collect_path(\n+        self,\n+        path: Path,\n+        path_cache: Dict[Path, Sequence[nodes.Collector]],\n+    ) -> Sequence[nodes.Collector]:\n+        \"\"\"Create a Collector for the given path.\n \n-        ihook = self.gethookproxy(fspath)\n-        if not self.isinitpath(fspath):\n-            if ihook.pytest_ignore_collect(collection_path=fspath, config=self.config):\n-                return None\n+        `path_cache` makes it so the same Collectors are returned for the same\n+        path.\n+        \"\"\"\n+        if path in path_cache:\n+            return path_cache[path]\n \n-        pkg: Package = Package.from_parent(self, path=fspath)\n-        return pkg\n+        if path.is_dir():\n+            ihook = self.gethookproxy(path.parent)\n+            col: Optional[nodes.Collector] = ihook.pytest_collect_directory(\n+                path=path, parent=self\n+            )\n+            cols: Sequence[nodes.Collector] = (col,) if col is not None else ()\n \n-    def _collectfile(\n-        self, fspath: Path, handle_dupes: bool = True\n-    ) -> Sequence[nodes.Collector]:\n-        assert (\n-            fspath.is_file()\n-        ), \"{!r} is not a file (isdir={!r}, exists={!r}, islink={!r})\".format(\n-            fspath, fspath.is_dir(), fspath.exists(), fspath.is_symlink()\n-        )\n-        ihook = self.gethookproxy(fspath)\n-        if not self.isinitpath(fspath):\n-            if ihook.pytest_ignore_collect(collection_path=fspath, config=self.config):\n-                return ()\n+        elif path.is_file():\n+            ihook = self.gethookproxy(path)\n+            cols = ihook.pytest_collect_file(file_path=path, parent=self)\n \n-        if handle_dupes:\n-            keepduplicates = self.config.getoption(\"keepduplicates\")\n-            if not keepduplicates:\n-                duplicate_paths = self.config.pluginmanager._duplicatepaths\n-                if fspath in duplicate_paths:\n-                    return ()\n-                else:\n-                    duplicate_paths.add(fspath)\n+        else:\n+            # Broken symlink or invalid/missing file.\n+            cols = ()\n \n-        return ihook.pytest_collect_file(file_path=fspath, parent=self)  # type: ignore[no-any-return]\n+        path_cache[path] = cols\n+        return cols\n \n     @overload\n     def perform_collect(\n@@ -658,15 +715,16 @@ def perform_collect(  # noqa: F811\n         self.trace(\"perform_collect\", self, args)\n         self.trace.root.indent += 1\n \n-        self._notfound: List[Tuple[str, Sequence[nodes.Collector]]] = []\n-        self._initial_parts: List[Tuple[Path, List[str]]] = []\n-        self.items: List[nodes.Item] = []\n-\n         hook = self.config.hook\n \n+        self._notfound = []\n+        self._initial_parts = []\n+        self._collection_cache = {}\n+        self.items = []\n         items: Sequence[Union[nodes.Item, nodes.Collector]] = self.items\n         try:\n             initialpaths: List[Path] = []\n+            initialpaths_with_parents: List[Path] = []\n             for arg in args:\n                 fspath, parts = resolve_collection_argument(\n                     self.config.invocation_params.dir,\n@@ -675,7 +733,11 @@ def perform_collect(  # noqa: F811\n                 )\n                 self._initial_parts.append((fspath, parts))\n                 initialpaths.append(fspath)\n+                initialpaths_with_parents.append(fspath)\n+                initialpaths_with_parents.extend(fspath.parents)\n             self._initialpaths = frozenset(initialpaths)\n+            self._initialpaths_with_parents = frozenset(initialpaths_with_parents)\n+\n             rep = collect_one_node(self)\n             self.ihook.pytest_collectreport(report=rep)\n             self.trace.root.indent -= 1\n@@ -684,12 +746,13 @@ def perform_collect(  # noqa: F811\n                 for arg, collectors in self._notfound:\n                     if collectors:\n                         errors.append(\n-                            f\"not found: {arg}\\n(no name {arg!r} in any of {collectors!r})\"\n+                            f\"not found: {arg}\\n(no match in any of {collectors!r})\"\n                         )\n                     else:\n                         errors.append(f\"found no collectors for {arg}\")\n \n                 raise UsageError(*errors)\n+\n             if not genitems:\n                 items = rep.result\n             else:\n@@ -702,131 +765,122 @@ def perform_collect(  # noqa: F811\n                 session=self, config=self.config, items=items\n             )\n         finally:\n+            self._notfound = []\n+            self._initial_parts = []\n+            self._collection_cache = {}\n             hook.pytest_collection_finish(session=self)\n \n-        self.testscollected = len(items)\n-        return items\n+        if genitems:\n+            self.testscollected = len(items)\n \n-    def collect(self) -> Iterator[Union[nodes.Item, nodes.Collector]]:\n-        # Keep track of any collected nodes in here, so we don't duplicate fixtures.\n-        node_cache1: Dict[Path, Sequence[nodes.Collector]] = {}\n-        node_cache2: Dict[Tuple[Type[nodes.Collector], Path], nodes.Collector] = {}\n+        return items\n \n-        # Keep track of any collected collectors in matchnodes paths, so they\n-        # are not collected more than once.\n-        matchnodes_cache: Dict[Tuple[Type[nodes.Collector], str], CollectReport] = {}\n+    def _collect_one_node(\n+        self,\n+        node: nodes.Collector,\n+        handle_dupes: bool = True,\n+    ) -> Tuple[CollectReport, bool]:\n+        if node in self._collection_cache and handle_dupes:\n+            rep = self._collection_cache[node]\n+            return rep, True\n+        else:\n+            rep = collect_one_node(node)\n+            self._collection_cache[node] = rep\n+            return rep, False\n \n-        # Directories of pkgs with dunder-init files.\n-        pkg_roots: Dict[Path, \"Package\"] = {}\n+    def collect(self) -> Iterator[Union[nodes.Item, nodes.Collector]]:\n+        # This is a cache for the root directories of the initial paths.\n+        # We can't use collection_cache for Session because of its special\n+        # role as the bootstrapping collector.\n+        path_cache: Dict[Path, Sequence[nodes.Collector]] = {}\n \n         pm = self.config.pluginmanager\n \n         for argpath, names in self._initial_parts:\n             self.trace(\"processing argument\", (argpath, names))\n             self.trace.root.indent += 1\n \n-            # Start with a Session root, and delve to argpath item (dir or file)\n-            # and stack all Packages found on the way.\n-            for parent in (argpath, *argpath.parents):\n-                if not pm._is_in_confcutdir(argpath):\n-                    break\n-\n-                if parent.is_dir():\n-                    pkginit = parent / \"__init__.py\"\n-                    if pkginit.is_file() and parent not in node_cache1:\n-                        pkg = self._collectpackage(parent)\n-                        if pkg is not None:\n-                            pkg_roots[parent] = pkg\n-                            node_cache1[pkg.path] = [pkg]\n-\n-            # If it's a directory argument, recurse and look for any Subpackages.\n-            # Let the Package collector deal with subnodes, don't collect here.\n+            # resolve_collection_argument() ensures this.\n             if argpath.is_dir():\n                 assert not names, f\"invalid arg {(argpath, names)!r}\"\n \n-                if argpath in pkg_roots:\n-                    yield pkg_roots[argpath]\n-\n-                for direntry in visit(argpath, self._recurse):\n-                    path = Path(direntry.path)\n-                    if direntry.is_dir() and self._recurse(direntry):\n-                        pkginit = path / \"__init__.py\"\n-                        if pkginit.is_file():\n-                            pkg = self._collectpackage(path)\n-                            if pkg is not None:\n-                                yield pkg\n-                                pkg_roots[path] = pkg\n-\n-                    elif direntry.is_file():\n-                        if path.parent in pkg_roots:\n-                            # Package handles this file.\n-                            continue\n-                        for x in self._collectfile(path):\n-                            key2 = (type(x), x.path)\n-                            if key2 in node_cache2:\n-                                yield node_cache2[key2]\n-                            else:\n-                                node_cache2[key2] = x\n-                                yield x\n-            else:\n-                assert argpath.is_file()\n+            # Match the argpath from the root, e.g.\n+            #   /a/b/c.py -> [/, /a, /a/b, /a/b/c.py]\n+            paths = [*reversed(argpath.parents), argpath]\n+            # Paths outside of the confcutdir should not be considered, unless\n+            # it's the argpath itself.\n+            while len(paths) > 1 and not pm._is_in_confcutdir(paths[0]):\n+                paths = paths[1:]\n+\n+            # Start going over the parts from the root, collecting each level\n+            # and discarding all nodes which don't match the level's part.\n+            any_matched_in_initial_part = False\n+            notfound_collectors = []\n+            work: List[\n+                Tuple[Union[nodes.Collector, nodes.Item], List[Union[Path, str]]]\n+            ] = [(self, paths + names)]\n+            while work:\n+                matchnode, matchparts = work.pop()\n+\n+                # Pop'd all of the parts, this is a match.\n+                if not matchparts:\n+                    yield matchnode\n+                    any_matched_in_initial_part = True\n+                    continue\n \n-                if argpath in node_cache1:\n-                    col = node_cache1[argpath]\n-                else:\n-                    collect_root = pkg_roots.get(argpath.parent, self)\n-                    col = collect_root._collectfile(argpath, handle_dupes=False)\n-                    if col:\n-                        node_cache1[argpath] = col\n-\n-                matching = []\n-                work: List[\n-                    Tuple[Sequence[Union[nodes.Item, nodes.Collector]], Sequence[str]]\n-                ] = [(col, names)]\n-                while work:\n-                    self.trace(\"matchnodes\", col, names)\n-                    self.trace.root.indent += 1\n-\n-                    matchnodes, matchnames = work.pop()\n-                    for node in matchnodes:\n-                        if not matchnames:\n-                            matching.append(node)\n-                            continue\n-                        if not isinstance(node, nodes.Collector):\n-                            continue\n-                        key = (type(node), node.nodeid)\n-                        if key in matchnodes_cache:\n-                            rep = matchnodes_cache[key]\n-                        else:\n-                            rep = collect_one_node(node)\n-                            matchnodes_cache[key] = rep\n-                        if rep.passed:\n-                            submatchnodes = []\n-                            for r in rep.result:\n-                                # TODO: Remove parametrized workaround once collection structure contains\n-                                # parametrization.\n-                                if (\n-                                    r.name == matchnames[0]\n-                                    or r.name.split(\"[\")[0] == matchnames[0]\n-                                ):\n-                                    submatchnodes.append(r)\n-                            if submatchnodes:\n-                                work.append((submatchnodes, matchnames[1:]))\n-                        else:\n-                            # Report collection failures here to avoid failing to run some test\n-                            # specified in the command line because the module could not be\n-                            # imported (#134).\n-                            node.ihook.pytest_collectreport(report=rep)\n-\n-                    self.trace(\"matchnodes finished -> \", len(matching), \"nodes\")\n-                    self.trace.root.indent -= 1\n-\n-                if not matching:\n-                    report_arg = \"::\".join((str(argpath), *names))\n-                    self._notfound.append((report_arg, col))\n+                # Should have been matched by now, discard.\n+                if not isinstance(matchnode, nodes.Collector):\n                     continue\n \n-                yield from matching\n+                # Collect this level of matching.\n+                # Collecting Session (self) is done directly to avoid endless\n+                # recursion to this function.\n+                subnodes: Sequence[Union[nodes.Collector, nodes.Item]]\n+                if isinstance(matchnode, Session):\n+                    assert isinstance(matchparts[0], Path)\n+                    subnodes = matchnode._collect_path(matchparts[0], path_cache)\n+                else:\n+                    # For backward compat, files given directly multiple\n+                    # times on the command line should not be deduplicated.\n+                    handle_dupes = not (\n+                        len(matchparts) == 1\n+                        and isinstance(matchparts[0], Path)\n+                        and matchparts[0].is_file()\n+                    )\n+                    rep, duplicate = self._collect_one_node(matchnode, handle_dupes)\n+                    if not duplicate and not rep.passed:\n+                        # Report collection failures here to avoid failing to\n+                        # run some test specified in the command line because\n+                        # the module could not be imported (#134).\n+                        matchnode.ihook.pytest_collectreport(report=rep)\n+                    if not rep.passed:\n+                        continue\n+                    subnodes = rep.result\n+\n+                # Prune this level.\n+                any_matched_in_collector = False\n+                for node in subnodes:\n+                    # Path part e.g. `/a/b/` in `/a/b/test_file.py::TestIt::test_it`.\n+                    if isinstance(matchparts[0], Path):\n+                        is_match = node.path == matchparts[0]\n+                    # Name part e.g. `TestIt` in `/a/b/test_file.py::TestIt::test_it`.\n+                    else:\n+                        # TODO: Remove parametrized workaround once collection structure contains\n+                        # parametrization.\n+                        is_match = (\n+                            node.name == matchparts[0]\n+                            or node.name.split(\"[\")[0] == matchparts[0]\n+                        )\n+                    if is_match:\n+                        work.append((node, matchparts[1:]))\n+                        any_matched_in_collector = True\n+\n+                if not any_matched_in_collector:\n+                    notfound_collectors.append(matchnode)\n+\n+            if not any_matched_in_initial_part:\n+                report_arg = \"::\".join((str(argpath), *names))\n+                self._notfound.append((report_arg, notfound_collectors))\n \n             self.trace.root.indent -= 1\n \n@@ -839,11 +893,17 @@ def genitems(\n             yield node\n         else:\n             assert isinstance(node, nodes.Collector)\n-            rep = collect_one_node(node)\n+            keepduplicates = self.config.getoption(\"keepduplicates\")\n+            # For backward compat, dedup only applies to files.\n+            handle_dupes = not (keepduplicates and isinstance(node, nodes.File))\n+            rep, duplicate = self._collect_one_node(node, handle_dupes)\n+            if duplicate and not keepduplicates:\n+                return\n             if rep.passed:\n                 for subnode in rep.result:\n                     yield from self.genitems(subnode)\n-            node.ihook.pytest_collectreport(report=rep)\n+            if not duplicate:\n+                node.ihook.pytest_collectreport(report=rep)\n \n \n def search_pypath(module_name: str) -> str:"
+    },
+    {
+      "sha": "3f97299ea708086191c1c7ef754a391a688dab29",
+      "filename": "src/_pytest/mark/__init__.py",
+      "status": "modified",
+      "additions": 10,
+      "deletions": 3,
+      "changes": 13,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/src%2F_pytest%2Fmark%2F__init__.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/src%2F_pytest%2Fmark%2F__init__.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/src%2F_pytest%2Fmark%2F__init__.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -152,12 +152,19 @@ class KeywordMatcher:\n     def from_item(cls, item: \"Item\") -> \"KeywordMatcher\":\n         mapped_names = set()\n \n-        # Add the names of the current item and any parent items.\n+        # Add the names of the current item and any parent items,\n+        # except the Session and root Directory's which are not\n+        # interesting for matching.\n         import pytest\n \n         for node in item.listchain():\n-            if not isinstance(node, pytest.Session):\n-                mapped_names.add(node.name)\n+            if isinstance(node, pytest.Session):\n+                continue\n+            if isinstance(node, pytest.Directory) and isinstance(\n+                node.parent, pytest.Session\n+            ):\n+                continue\n+            mapped_names.add(node.name)\n \n         # Add the names added as extra keywords to current or parent items.\n         mapped_names.update(item.listextrakeywords())"
+    },
+    {
+      "sha": "29efd56f49e184db209c5f29a7b16c131ff58b61",
+      "filename": "src/_pytest/nodes.py",
+      "status": "modified",
+      "additions": 18,
+      "deletions": 0,
+      "changes": 18,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/src%2F_pytest%2Fnodes.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/src%2F_pytest%2Fnodes.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/src%2F_pytest%2Fnodes.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -676,6 +676,24 @@ class File(FSCollector, abc.ABC):\n     \"\"\"\n \n \n+class Directory(FSCollector, abc.ABC):\n+    \"\"\"Base class for collecting files from a directory.\n+\n+    A basic directory collector does the following: goes over the files and\n+    sub-directories in the directory and creates collectors for them by calling\n+    the hooks :hook:`pytest_collect_directory` and :hook:`pytest_collect_file`,\n+    after checking that they are not ignored using\n+    :hook:`pytest_ignore_collect`.\n+\n+    The default directory collectors are :class:`~pytest.Dir` and\n+    :class:`~pytest.Package`.\n+\n+    .. versionadded:: 8.0\n+\n+    :ref:`custom directory collectors`.\n+    \"\"\"\n+\n+\n class Item(Node, abc.ABC):\n     \"\"\"Base class of all test invocation items.\n "
+    },
+    {
+      "sha": "4cd635ed7e1b30b39b08666578585336e1e2354f",
+      "filename": "src/_pytest/pathlib.py",
+      "status": "modified",
+      "additions": 7,
+      "deletions": 3,
+      "changes": 10,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/src%2F_pytest%2Fpathlib.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/src%2F_pytest%2Fpathlib.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/src%2F_pytest%2Fpathlib.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -689,10 +689,14 @@ def resolve_package_path(path: Path) -> Optional[Path]:\n     return result\n \n \n-def scandir(path: Union[str, \"os.PathLike[str]\"]) -> List[\"os.DirEntry[str]\"]:\n+def scandir(\n+    path: Union[str, \"os.PathLike[str]\"],\n+    sort_key: Callable[[\"os.DirEntry[str]\"], object] = lambda entry: entry.name,\n+) -> List[\"os.DirEntry[str]\"]:\n     \"\"\"Scan a directory recursively, in breadth-first order.\n \n-    The returned entries are sorted.\n+    The returned entries are sorted according to the given key.\n+    The default is to sort by name.\n     \"\"\"\n     entries = []\n     with os.scandir(path) as s:\n@@ -706,7 +710,7 @@ def scandir(path: Union[str, \"os.PathLike[str]\"]) -> List[\"os.DirEntry[str]\"]:\n                     continue\n                 raise\n             entries.append(entry)\n-    entries.sort(key=lambda entry: entry.name)\n+    entries.sort(key=sort_key)  # type: ignore[arg-type]\n     return entries\n \n "
+    },
+    {
+      "sha": "e0f7a447a61994def3bafce2f2ea1c2ee1f68fd3",
+      "filename": "src/_pytest/python.py",
+      "status": "modified",
+      "additions": 51,
+      "deletions": 65,
+      "changes": 116,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/src%2F_pytest%2Fpython.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/src%2F_pytest%2Fpython.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/src%2F_pytest%2Fpython.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -76,8 +76,7 @@\n from _pytest.pathlib import fnmatch_ex\n from _pytest.pathlib import import_path\n from _pytest.pathlib import ImportPathMismatchError\n-from _pytest.pathlib import parts\n-from _pytest.pathlib import visit\n+from _pytest.pathlib import scandir\n from _pytest.scope import _ScopeName\n from _pytest.scope import Scope\n from _pytest.stash import StashKey\n@@ -204,6 +203,16 @@ def pytest_pyfunc_call(pyfuncitem: \"Function\") -> Optional[object]:\n     return True\n \n \n+def pytest_collect_directory(\n+    path: Path, parent: nodes.Collector\n+) -> Optional[nodes.Collector]:\n+    pkginit = path / \"__init__.py\"\n+    if pkginit.is_file():\n+        pkg: Package = Package.from_parent(parent, path=path)\n+        return pkg\n+    return None\n+\n+\n def pytest_collect_file(file_path: Path, parent: nodes.Collector) -> Optional[\"Module\"]:\n     if file_path.suffix == \".py\":\n         if not parent.session.isinitpath(file_path):\n@@ -659,9 +668,20 @@ def xunit_setup_function_fixture(request) -> Generator[None, None, None]:\n         self.obj.__pytest_setup_function = xunit_setup_function_fixture\n \n \n-class Package(nodes.FSCollector):\n+class Package(nodes.Directory):\n     \"\"\"Collector for files and directories in a Python packages -- directories\n-    with an `__init__.py` file.\"\"\"\n+    with an `__init__.py` file.\n+\n+    .. note::\n+\n+        Directories without an `__init__.py` file are instead collected by\n+        :class:`~pytest.Dir` by default. Both are :class:`~pytest.Directory`\n+        collectors.\n+\n+    .. versionchanged:: 8.0\n+\n+        Now inherits from :class:`~pytest.Directory`.\n+    \"\"\"\n \n     def __init__(\n         self,\n@@ -674,18 +694,16 @@ def __init__(\n         path: Optional[Path] = None,\n     ) -> None:\n         # NOTE: Could be just the following, but kept as-is for compat.\n-        # nodes.FSCollector.__init__(self, fspath, parent=parent)\n+        # super().__init__(self, fspath, parent=parent)\n         session = parent.session\n-        nodes.FSCollector.__init__(\n-            self,\n+        super().__init__(\n             fspath=fspath,\n             path=path,\n             parent=parent,\n             config=config,\n             session=session,\n             nodeid=nodeid,\n         )\n-        self.name = self.path.name\n \n     def setup(self) -> None:\n         init_mod = importtestmodule(self.path / \"__init__.py\", self.config)\n@@ -705,66 +723,34 @@ def setup(self) -> None:\n             func = partial(_call_with_optional_argument, teardown_module, init_mod)\n             self.addfinalizer(func)\n \n-    def _recurse(self, direntry: \"os.DirEntry[str]\") -> bool:\n-        if direntry.name == \"__pycache__\":\n-            return False\n-        fspath = Path(direntry.path)\n-        ihook = self.session.gethookproxy(fspath.parent)\n-        if ihook.pytest_ignore_collect(collection_path=fspath, config=self.config):\n-            return False\n-        return True\n-\n-    def _collectfile(\n-        self, fspath: Path, handle_dupes: bool = True\n-    ) -> Sequence[nodes.Collector]:\n-        assert (\n-            fspath.is_file()\n-        ), \"{!r} is not a file (isdir={!r}, exists={!r}, islink={!r})\".format(\n-            fspath, fspath.is_dir(), fspath.exists(), fspath.is_symlink()\n-        )\n-        ihook = self.session.gethookproxy(fspath)\n-        if not self.session.isinitpath(fspath):\n-            if ihook.pytest_ignore_collect(collection_path=fspath, config=self.config):\n-                return ()\n-\n-        if handle_dupes:\n-            keepduplicates = self.config.getoption(\"keepduplicates\")\n-            if not keepduplicates:\n-                duplicate_paths = self.config.pluginmanager._duplicatepaths\n-                if fspath in duplicate_paths:\n-                    return ()\n-                else:\n-                    duplicate_paths.add(fspath)\n-\n-        return ihook.pytest_collect_file(file_path=fspath, parent=self)  # type: ignore[no-any-return]\n-\n     def collect(self) -> Iterable[Union[nodes.Item, nodes.Collector]]:\n-        # Always collect the __init__ first.\n-        yield from self._collectfile(self.path / \"__init__.py\")\n+        # Always collect __init__.py first.\n+        def sort_key(entry: \"os.DirEntry[str]\") -> object:\n+            return (entry.name != \"__init__.py\", entry.name)\n \n-        pkg_prefixes: Set[Path] = set()\n-        for direntry in visit(self.path, recurse=self._recurse):\n-            path = Path(direntry.path)\n-\n-            # Already handled above.\n-            if direntry.is_file():\n-                if direntry.name == \"__init__.py\" and path.parent == self.path:\n+        config = self.config\n+        col: Optional[nodes.Collector]\n+        cols: Sequence[nodes.Collector]\n+        ihook = self.ihook\n+        for direntry in scandir(self.path, sort_key):\n+            if direntry.is_dir():\n+                if direntry.name == \"__pycache__\":\n                     continue\n-\n-            parts_ = parts(direntry.path)\n-            if any(\n-                str(pkg_prefix) in parts_ and pkg_prefix / \"__init__.py\" != path\n-                for pkg_prefix in pkg_prefixes\n-            ):\n-                continue\n-\n-            if direntry.is_file():\n-                yield from self._collectfile(path)\n-            elif not direntry.is_dir():\n-                # Broken symlink or invalid/missing file.\n-                continue\n-            elif self._recurse(direntry) and path.joinpath(\"__init__.py\").is_file():\n-                pkg_prefixes.add(path)\n+                path = Path(direntry.path)\n+                if not self.session.isinitpath(path, with_parents=True):\n+                    if ihook.pytest_ignore_collect(collection_path=path, config=config):\n+                        continue\n+                col = ihook.pytest_collect_directory(path=path, parent=self)\n+                if col is not None:\n+                    yield col\n+\n+            elif direntry.is_file():\n+                path = Path(direntry.path)\n+                if not self.session.isinitpath(path):\n+                    if ihook.pytest_ignore_collect(collection_path=path, config=config):\n+                        continue\n+                cols = ihook.pytest_collect_file(file_path=path, parent=self)\n+                yield from cols\n \n \n def _call_with_optional_argument(func, arg) -> None:"
+    },
+    {
+      "sha": "dcfc6b7d0e28acea67e167c8a2f92ff09ae2591e",
+      "filename": "src/_pytest/runner.py",
+      "status": "modified",
+      "additions": 18,
+      "deletions": 1,
+      "changes": 19,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/src%2F_pytest%2Frunner.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/src%2F_pytest%2Frunner.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/src%2F_pytest%2Frunner.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -28,6 +28,7 @@\n from _pytest.config.argparsing import Parser\n from _pytest.deprecated import check_ispytest\n from _pytest.nodes import Collector\n+from _pytest.nodes import Directory\n from _pytest.nodes import Item\n from _pytest.nodes import Node\n from _pytest.outcomes import Exit\n@@ -368,7 +369,23 @@ def pytest_runtest_makereport(item: Item, call: CallInfo[None]) -> TestReport:\n \n \n def pytest_make_collect_report(collector: Collector) -> CollectReport:\n-    call = CallInfo.from_call(lambda: list(collector.collect()), \"collect\")\n+    def collect() -> List[Union[Item, Collector]]:\n+        # Before collecting, if this is a Directory, load the conftests.\n+        # If a conftest import fails to load, it is considered a collection\n+        # error of the Directory collector. This is why it's done inside of the\n+        # CallInfo wrapper.\n+        #\n+        # Note: initial conftests are loaded early, not here.\n+        if isinstance(collector, Directory):\n+            collector.config.pluginmanager._loadconftestmodules(\n+                collector.path,\n+                collector.config.getoption(\"importmode\"),\n+                rootpath=collector.config.rootpath,\n+            )\n+\n+        return list(collector.collect())\n+\n+    call = CallInfo.from_call(collect, \"collect\")\n     longrepr: Union[None, Tuple[str, int, str], str, TerminalRepr] = None\n     if not call.excinfo:\n         outcome: Literal[\"passed\", \"skipped\", \"failed\"] = \"passed\""
+    },
+    {
+      "sha": "4e0c23ddbe7dfe0cabccb60e04c666df3db56b64",
+      "filename": "src/pytest/__init__.py",
+      "status": "modified",
+      "additions": 4,
+      "deletions": 0,
+      "changes": 4,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/src%2Fpytest%2F__init__.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/src%2Fpytest%2F__init__.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/src%2Fpytest%2F__init__.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -30,6 +30,7 @@\n from _pytest.legacypath import TempdirFactory\n from _pytest.legacypath import Testdir\n from _pytest.logging import LogCaptureFixture\n+from _pytest.main import Dir\n from _pytest.main import Session\n from _pytest.mark import Mark\n from _pytest.mark import MARK_GEN as mark\n@@ -38,6 +39,7 @@\n from _pytest.mark import param\n from _pytest.monkeypatch import MonkeyPatch\n from _pytest.nodes import Collector\n+from _pytest.nodes import Directory\n from _pytest.nodes import File\n from _pytest.nodes import Item\n from _pytest.outcomes import exit\n@@ -98,6 +100,8 @@\n     \"Config\",\n     \"console_main\",\n     \"deprecated_call\",\n+    \"Dir\",\n+    \"Directory\",\n     \"DoctestItem\",\n     \"exit\",\n     \"ExceptionInfo\","
+    },
+    {
+      "sha": "43390ab83aed0ef4bb510412cfd2bd8f15f380b3",
+      "filename": "testing/acceptance_test.py",
+      "status": "modified",
+      "additions": 3,
+      "deletions": 2,
+      "changes": 5,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Facceptance_test.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Facceptance_test.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Facceptance_test.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -185,7 +185,8 @@ def test_not_collectable_arguments(self, pytester: Pytester) -> None:\n         assert result.ret == ExitCode.USAGE_ERROR\n         result.stderr.fnmatch_lines(\n             [\n-                f\"ERROR: found no collectors for {p2}\",\n+                f\"ERROR: not found: {p2}\",\n+                \"(no match in any of *)\",\n                 \"\",\n             ]\n         )\n@@ -238,7 +239,7 @@ def test_issue88_initial_file_multinodes(self, pytester: Pytester) -> None:\n         pytester.copy_example(\"issue88_initial_file_multinodes\")\n         p = pytester.makepyfile(\"def test_hello(): pass\")\n         result = pytester.runpytest(p, \"--collect-only\")\n-        result.stdout.fnmatch_lines([\"*MyFile*test_issue88*\", \"*Module*test_issue88*\"])\n+        result.stdout.fnmatch_lines([\"*Module*test_issue88*\", \"*MyFile*test_issue88*\"])\n \n     def test_issue93_initialnode_importing_capturing(self, pytester: Pytester) -> None:\n         pytester.makeconftest("
+    },
+    {
+      "sha": "5357014d7ab0f79f959738d6350ce1d07accf1dd",
+      "filename": "testing/example_scripts/customdirectory/conftest.py",
+      "status": "added",
+      "additions": 22,
+      "deletions": 0,
+      "changes": 22,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Fexample_scripts%2Fcustomdirectory%2Fconftest.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Fexample_scripts%2Fcustomdirectory%2Fconftest.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Fexample_scripts%2Fcustomdirectory%2Fconftest.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -0,0 +1,22 @@\n+# content of conftest.py\n+import json\n+\n+import pytest\n+\n+\n+class ManifestDirectory(pytest.Directory):\n+    def collect(self):\n+        manifest_path = self.path / \"manifest.json\"\n+        manifest = json.loads(manifest_path.read_text(encoding=\"utf-8\"))\n+        ihook = self.ihook\n+        for file in manifest[\"files\"]:\n+            yield from ihook.pytest_collect_file(\n+                file_path=self.path / file, parent=self\n+            )\n+\n+\n+@pytest.hookimpl\n+def pytest_collect_directory(path, parent):\n+    if path.joinpath(\"manifest.json\").is_file():\n+        return ManifestDirectory.from_parent(parent=parent, path=path)\n+    return None"
+    },
+    {
+      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "filename": "testing/example_scripts/customdirectory/pytest.ini",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0,
+      "changes": 0,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Fexample_scripts%2Fcustomdirectory%2Fpytest.ini",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Fexample_scripts%2Fcustomdirectory%2Fpytest.ini",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Fexample_scripts%2Fcustomdirectory%2Fpytest.ini?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39"
+    },
+    {
+      "sha": "6ab6d0a522269fbe85a7a0fb9450a11b17ebc5ab",
+      "filename": "testing/example_scripts/customdirectory/tests/manifest.json",
+      "status": "added",
+      "additions": 6,
+      "deletions": 0,
+      "changes": 6,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Fexample_scripts%2Fcustomdirectory%2Ftests%2Fmanifest.json",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Fexample_scripts%2Fcustomdirectory%2Ftests%2Fmanifest.json",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Fexample_scripts%2Fcustomdirectory%2Ftests%2Fmanifest.json?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -0,0 +1,6 @@\n+{\n+    \"files\": [\n+        \"test_first.py\",\n+        \"test_second.py\"\n+    ]\n+}"
+    },
+    {
+      "sha": "0a78de59945d3ab99f3659d9d1a554a973bb9d78",
+      "filename": "testing/example_scripts/customdirectory/tests/test_first.py",
+      "status": "added",
+      "additions": 3,
+      "deletions": 0,
+      "changes": 3,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Fexample_scripts%2Fcustomdirectory%2Ftests%2Ftest_first.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Fexample_scripts%2Fcustomdirectory%2Ftests%2Ftest_first.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Fexample_scripts%2Fcustomdirectory%2Ftests%2Ftest_first.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -0,0 +1,3 @@\n+# content of test_first.py\n+def test_1():\n+    pass"
+    },
+    {
+      "sha": "eed724a7d969fe6e95874d2b86d85e22419b2285",
+      "filename": "testing/example_scripts/customdirectory/tests/test_second.py",
+      "status": "added",
+      "additions": 3,
+      "deletions": 0,
+      "changes": 3,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Fexample_scripts%2Fcustomdirectory%2Ftests%2Ftest_second.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Fexample_scripts%2Fcustomdirectory%2Ftests%2Ftest_second.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Fexample_scripts%2Fcustomdirectory%2Ftests%2Ftest_second.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -0,0 +1,3 @@\n+# content of test_second.py\n+def test_2():\n+    pass"
+    },
+    {
+      "sha": "61cf59dc16c2a51e85e0c48c2bf570de4fdb49b3",
+      "filename": "testing/example_scripts/customdirectory/tests/test_third.py",
+      "status": "added",
+      "additions": 3,
+      "deletions": 0,
+      "changes": 3,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Fexample_scripts%2Fcustomdirectory%2Ftests%2Ftest_third.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Fexample_scripts%2Fcustomdirectory%2Ftests%2Ftest_third.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Fexample_scripts%2Fcustomdirectory%2Ftests%2Ftest_third.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -0,0 +1,3 @@\n+# content of test_third.py\n+def test_3():\n+    pass"
+    },
+    {
+      "sha": "da11dd34a9a78f10abd780eef1fbdee365f7dd09",
+      "filename": "testing/python/collect.py",
+      "status": "modified",
+      "additions": 105,
+      "deletions": 0,
+      "changes": 105,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Fpython%2Fcollect.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Fpython%2Fcollect.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Fpython%2Fcollect.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -1514,3 +1514,108 @@ def test_package_ordering(pytester: Pytester) -> None:\n     # Execute from .\n     result = pytester.runpytest(\"-v\", \"-s\")\n     result.assert_outcomes(passed=3)\n+\n+\n+def test_collection_hierarchy(pytester: Pytester) -> None:\n+    \"\"\"A general test checking that a filesystem hierarchy is collected as\n+    expected in various scenarios.\n+\n+    top/\n+    \u251c\u2500\u2500 aaa\n+    \u2502   \u251c\u2500\u2500 pkg\n+    \u2502   \u2502   \u251c\u2500\u2500 __init__.py\n+    \u2502   \u2502   \u2514\u2500\u2500 test_pkg.py\n+    \u2502   \u2514\u2500\u2500 test_aaa.py\n+    \u251c\u2500\u2500 test_a.py\n+    \u251c\u2500\u2500 test_b\n+    \u2502   \u251c\u2500\u2500 __init__.py\n+    \u2502   \u2514\u2500\u2500 test_b.py\n+    \u251c\u2500\u2500 test_c.py\n+    \u2514\u2500\u2500 zzz\n+        \u251c\u2500\u2500 dir\n+        \u2502   \u2514\u2500\u2500 test_dir.py\n+        \u251c\u2500\u2500 __init__.py\n+        \u2514\u2500\u2500 test_zzz.py\n+    \"\"\"\n+    pytester.makepyfile(\n+        **{\n+            \"top/aaa/test_aaa.py\": \"def test_it(): pass\",\n+            \"top/aaa/pkg/__init__.py\": \"\",\n+            \"top/aaa/pkg/test_pkg.py\": \"def test_it(): pass\",\n+            \"top/test_a.py\": \"def test_it(): pass\",\n+            \"top/test_b/__init__.py\": \"\",\n+            \"top/test_b/test_b.py\": \"def test_it(): pass\",\n+            \"top/test_c.py\": \"def test_it(): pass\",\n+            \"top/zzz/__init__.py\": \"\",\n+            \"top/zzz/test_zzz.py\": \"def test_it(): pass\",\n+            \"top/zzz/dir/test_dir.py\": \"def test_it(): pass\",\n+        }\n+    )\n+\n+    full = [\n+        \"<Dir test_collection_hierarchy*>\",\n+        \"  <Dir top>\",\n+        \"    <Dir aaa>\",\n+        \"      <Package pkg>\",\n+        \"        <Module test_pkg.py>\",\n+        \"          <Function test_it>\",\n+        \"      <Module test_aaa.py>\",\n+        \"        <Function test_it>\",\n+        \"    <Module test_a.py>\",\n+        \"      <Function test_it>\",\n+        \"    <Package test_b>\",\n+        \"      <Module test_b.py>\",\n+        \"        <Function test_it>\",\n+        \"    <Module test_c.py>\",\n+        \"      <Function test_it>\",\n+        \"    <Package zzz>\",\n+        \"      <Dir dir>\",\n+        \"        <Module test_dir.py>\",\n+        \"          <Function test_it>\",\n+        \"      <Module test_zzz.py>\",\n+        \"        <Function test_it>\",\n+    ]\n+    result = pytester.runpytest(\"--collect-only\")\n+    result.stdout.fnmatch_lines(full, consecutive=True)\n+    result = pytester.runpytest(\"top\", \"--collect-only\")\n+    result.stdout.fnmatch_lines(full, consecutive=True)\n+    result = pytester.runpytest(\"top\", \"top\", \"--collect-only\")\n+    result.stdout.fnmatch_lines(full, consecutive=True)\n+\n+    result = pytester.runpytest(\n+        \"top/aaa\", \"top/aaa/pkg\", \"--collect-only\", \"--keep-duplicates\"\n+    )\n+    result.stdout.fnmatch_lines(\n+        [\n+            \"<Dir test_collection_hierarchy*>\",\n+            \"  <Dir top>\",\n+            \"    <Dir aaa>\",\n+            \"      <Package pkg>\",\n+            \"        <Module test_pkg.py>\",\n+            \"          <Function test_it>\",\n+            \"      <Module test_aaa.py>\",\n+            \"        <Function test_it>\",\n+            \"      <Package pkg>\",\n+            \"        <Module test_pkg.py>\",\n+            \"          <Function test_it>\",\n+        ],\n+        consecutive=True,\n+    )\n+\n+    result = pytester.runpytest(\n+        \"top/aaa/pkg\", \"top/aaa\", \"--collect-only\", \"--keep-duplicates\"\n+    )\n+    result.stdout.fnmatch_lines(\n+        [\n+            \"<Dir test_collection_hierarchy*>\",\n+            \"  <Dir top>\",\n+            \"    <Dir aaa>\",\n+            \"      <Package pkg>\",\n+            \"        <Module test_pkg.py>\",\n+            \"          <Function test_it>\",\n+            \"          <Function test_it>\",\n+            \"      <Module test_aaa.py>\",\n+            \"        <Function test_it>\",\n+        ],\n+        consecutive=True,\n+    )"
+    },
+    {
+      "sha": "9768c82ffa737b58a4eb541aee839c504e5e6218",
+      "filename": "testing/python/metafunc.py",
+      "status": "modified",
+      "additions": 10,
+      "deletions": 10,
+      "changes": 20,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Fpython%2Fmetafunc.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Fpython%2Fmetafunc.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Fpython%2Fmetafunc.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -1005,16 +1005,16 @@ def test3(arg1):\n         result = pytester.runpytest(\"--collect-only\")\n         result.stdout.re_match_lines(\n             [\n-                r\"  <Function test1\\[0-3\\]>\",\n-                r\"  <Function test1\\[0-4\\]>\",\n-                r\"  <Function test3\\[0\\]>\",\n-                r\"  <Function test1\\[1-3\\]>\",\n-                r\"  <Function test1\\[1-4\\]>\",\n-                r\"  <Function test3\\[1\\]>\",\n-                r\"  <Function test1\\[2-3\\]>\",\n-                r\"  <Function test1\\[2-4\\]>\",\n-                r\"  <Function test3\\[2\\]>\",\n-                r\"  <Function test2>\",\n+                r\"    <Function test1\\[0-3\\]>\",\n+                r\"    <Function test1\\[0-4\\]>\",\n+                r\"    <Function test3\\[0\\]>\",\n+                r\"    <Function test1\\[1-3\\]>\",\n+                r\"    <Function test1\\[1-4\\]>\",\n+                r\"    <Function test3\\[1\\]>\",\n+                r\"    <Function test1\\[2-3\\]>\",\n+                r\"    <Function test1\\[2-4\\]>\",\n+                r\"    <Function test3\\[2\\]>\",\n+                r\"    <Function test2>\",\n             ]\n         )\n "
+    },
+    {
+      "sha": "c08c1cd82006f4da6d8c4e4e46abcee3eae79de4",
+      "filename": "testing/test_assertion.py",
+      "status": "modified",
+      "additions": 5,
+      "deletions": 5,
+      "changes": 10,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Ftest_assertion.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Ftest_assertion.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_assertion.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -1574,12 +1574,12 @@ def test_assertrepr_loaded_per_dir(pytester: Pytester) -> None:\n     result = pytester.runpytest()\n     result.stdout.fnmatch_lines(\n         [\n-            \"*def test_base():*\",\n-            \"*E*assert 1 == 2*\",\n             \"*def test_a():*\",\n             \"*E*assert summary a*\",\n             \"*def test_b():*\",\n             \"*E*assert summary b*\",\n+            \"*def test_base():*\",\n+            \"*E*assert 1 == 2*\",\n         ]\n     )\n \n@@ -1744,9 +1744,9 @@ def test_something():\n     )\n     result = pytester.runpytest(\"--collect-only\")\n     result.stdout.fnmatch_lines(\n-        \"\"\"\n-        <Module*>\n-    \"\"\"\n+        [\n+            \"  <Module*>\",\n+        ]\n     )\n \n "
+    },
+    {
+      "sha": "21c1957cfeb7fa4adebe8592f73acc18ebb39246",
+      "filename": "testing/test_cacheprovider.py",
+      "status": "modified",
+      "additions": 23,
+      "deletions": 13,
+      "changes": 36,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Ftest_cacheprovider.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Ftest_cacheprovider.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_cacheprovider.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -422,7 +422,7 @@ def test_fail(val):\n         result = pytester.runpytest()\n         result.stdout.fnmatch_lines([\"*1 failed in*\"])\n \n-    @pytest.mark.parametrize(\"parent\", (\"session\", \"package\"))\n+    @pytest.mark.parametrize(\"parent\", (\"directory\", \"package\"))\n     def test_terminal_report_lastfailed(self, pytester: Pytester, parent: str) -> None:\n         if parent == \"package\":\n             pytester.makepyfile(\n@@ -936,8 +936,10 @@ def test_lastfailed_with_known_failures_not_being_selected(\n                 \"collected 1 item\",\n                 \"run-last-failure: rerun previous 1 failure (skipped 1 file)\",\n                 \"\",\n-                \"<Module pkg1/test_1.py>\",\n-                \"  <Function test_renamed>\",\n+                \"<Dir *>\",\n+                \"  <Dir pkg1>\",\n+                \"    <Module test_1.py>\",\n+                \"      <Function test_renamed>\",\n             ]\n         )\n \n@@ -966,8 +968,10 @@ def test_fail(): assert 0\n                 \"*collected 1 item\",\n                 \"run-last-failure: 1 known failures not in selected tests\",\n                 \"\",\n-                \"<Module pkg1/test_1.py>\",\n-                \"  <Function test_pass>\",\n+                \"<Dir *>\",\n+                \"  <Dir pkg1>\",\n+                \"    <Module test_1.py>\",\n+                \"      <Function test_pass>\",\n             ],\n             consecutive=True,\n         )\n@@ -981,8 +985,10 @@ def test_fail(): assert 0\n                 \"collected 2 items / 1 deselected / 1 selected\",\n                 \"run-last-failure: rerun previous 1 failure\",\n                 \"\",\n-                \"<Module pkg1/test_1.py>\",\n-                \"  <Function test_fail>\",\n+                \"<Dir *>\",\n+                \"  <Dir pkg1>\",\n+                \"    <Module test_1.py>\",\n+                \"      <Function test_fail>\",\n                 \"*= 1/2 tests collected (1 deselected) in *\",\n             ],\n         )\n@@ -1011,10 +1017,12 @@ def test_other(): assert 0\n                 \"collected 3 items / 1 deselected / 2 selected\",\n                 \"run-last-failure: rerun previous 2 failures\",\n                 \"\",\n-                \"<Module pkg1/test_1.py>\",\n-                \"  <Class TestFoo>\",\n-                \"    <Function test_fail>\",\n-                \"  <Function test_other>\",\n+                \"<Dir *>\",\n+                \"  <Dir pkg1>\",\n+                \"    <Module test_1.py>\",\n+                \"      <Class TestFoo>\",\n+                \"        <Function test_fail>\",\n+                \"      <Function test_other>\",\n                 \"\",\n                 \"*= 2/3 tests collected (1 deselected) in *\",\n             ],\n@@ -1048,8 +1056,10 @@ def test_pass(): pass\n                 \"collected 1 item\",\n                 \"run-last-failure: 1 known failures not in selected tests\",\n                 \"\",\n-                \"<Module pkg1/test_1.py>\",\n-                \"  <Function test_pass>\",\n+                \"<Dir *>\",\n+                \"  <Dir pkg1>\",\n+                \"    <Module test_1.py>\",\n+                \"      <Function test_pass>\",\n                 \"\",\n                 \"*= 1 test collected in*\",\n             ],"
+    },
+    {
+      "sha": "deed4bda522616aca2b0a9fe841f59bc6d35d195",
+      "filename": "testing/test_collection.py",
+      "status": "modified",
+      "additions": 81,
+      "deletions": 26,
+      "changes": 107,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Ftest_collection.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Ftest_collection.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_collection.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -490,7 +490,7 @@ def test_collect_topdir(self, pytester: Pytester) -> None:\n         # assert root2 == rcol, rootid\n         colitems = rcol.perform_collect([rcol.nodeid], genitems=False)\n         assert len(colitems) == 1\n-        assert colitems[0].path == p\n+        assert colitems[0].path == topdir\n \n     def get_reported_items(self, hookrec: HookRecorder) -> List[Item]:\n         \"\"\"Return pytest.Item instances reported by the pytest_collectreport hook\"\"\"\n@@ -568,12 +568,12 @@ def pytest_collect_file(file_path, parent):\n         hookrec.assert_contains(\n             [\n                 (\"pytest_collectstart\", \"collector.path == collector.session.path\"),\n+                (\"pytest_collectstart\", \"collector.__class__.__name__ == 'Module'\"),\n+                (\"pytest_pycollect_makeitem\", \"name == 'test_func'\"),\n                 (\n                     \"pytest_collectstart\",\n                     \"collector.__class__.__name__ == 'SpecialFile'\",\n                 ),\n-                (\"pytest_collectstart\", \"collector.__class__.__name__ == 'Module'\"),\n-                (\"pytest_pycollect_makeitem\", \"name == 'test_func'\"),\n                 (\"pytest_collectreport\", \"report.nodeid.startswith(p.name)\"),\n             ]\n         )\n@@ -657,7 +657,8 @@ def test_global_file(self, pytester: Pytester) -> None:\n         assert isinstance(col, pytest.Module)\n         assert col.name == \"x.py\"\n         assert col.parent is not None\n-        assert col.parent.parent is None\n+        assert col.parent.parent is not None\n+        assert col.parent.parent.parent is None\n         for parent in col.listchain():\n             assert parent.config is config\n \n@@ -937,6 +938,46 @@ def test_method(self): pass\n         assert \"baz\" not in mod.keywords\n \n \n+class TestCollectDirectoryHook:\n+    def test_custom_directory_example(self, pytester: Pytester) -> None:\n+        \"\"\"Verify the example from the customdirectory.rst doc.\"\"\"\n+        pytester.copy_example(\"customdirectory\")\n+\n+        reprec = pytester.inline_run()\n+\n+        reprec.assertoutcome(passed=2, failed=0)\n+        calls = reprec.getcalls(\"pytest_collect_directory\")\n+        assert len(calls) == 2\n+        assert calls[0].path == pytester.path\n+        assert isinstance(calls[0].parent, pytest.Session)\n+        assert calls[1].path == pytester.path / \"tests\"\n+        assert isinstance(calls[1].parent, pytest.Dir)\n+\n+    def test_directory_ignored_if_none(self, pytester: Pytester) -> None:\n+        \"\"\"If the (entire) hook returns None, it's OK, the directory is ignored.\"\"\"\n+        pytester.makeconftest(\n+            \"\"\"\n+            import pytest\n+\n+            @pytest.hookimpl(wrapper=True)\n+            def pytest_collect_directory():\n+                yield\n+                return None\n+            \"\"\",\n+        )\n+        pytester.makepyfile(\n+            **{\n+                \"tests/test_it.py\": \"\"\"\n+                    import pytest\n+\n+                    def test_it(): pass\n+                \"\"\",\n+            },\n+        )\n+        reprec = pytester.inline_run()\n+        reprec.assertoutcome(passed=0, failed=0)\n+\n+\n COLLECTION_ERROR_PY_FILES = dict(\n     test_01_failure=\"\"\"\n         def test_1():\n@@ -1098,56 +1139,70 @@ def test_collect_init_tests(pytester: Pytester) -> None:\n     result.stdout.fnmatch_lines(\n         [\n             \"collected 2 items\",\n-            \"<Package tests>\",\n-            \"  <Module __init__.py>\",\n-            \"    <Function test_init>\",\n-            \"  <Module test_foo.py>\",\n-            \"    <Function test_foo>\",\n+            \"<Dir *>\",\n+            \"  <Package tests>\",\n+            \"    <Module __init__.py>\",\n+            \"      <Function test_init>\",\n+            \"    <Module test_foo.py>\",\n+            \"      <Function test_foo>\",\n         ]\n     )\n     result = pytester.runpytest(\"./tests\", \"--collect-only\")\n     result.stdout.fnmatch_lines(\n         [\n             \"collected 2 items\",\n-            \"<Package tests>\",\n-            \"  <Module __init__.py>\",\n-            \"    <Function test_init>\",\n-            \"  <Module test_foo.py>\",\n-            \"    <Function test_foo>\",\n+            \"<Dir *>\",\n+            \"  <Package tests>\",\n+            \"    <Module __init__.py>\",\n+            \"      <Function test_init>\",\n+            \"    <Module test_foo.py>\",\n+            \"      <Function test_foo>\",\n         ]\n     )\n     # Ignores duplicates with \".\" and pkginit (#4310).\n     result = pytester.runpytest(\"./tests\", \".\", \"--collect-only\")\n     result.stdout.fnmatch_lines(\n         [\n             \"collected 2 items\",\n-            \"<Package tests>\",\n-            \"  <Module __init__.py>\",\n-            \"    <Function test_init>\",\n-            \"  <Module test_foo.py>\",\n-            \"    <Function test_foo>\",\n+            \"<Dir *>\",\n+            \"  <Package tests>\",\n+            \"    <Module __init__.py>\",\n+            \"      <Function test_init>\",\n+            \"    <Module test_foo.py>\",\n+            \"      <Function test_foo>\",\n         ]\n     )\n     # Same as before, but different order.\n     result = pytester.runpytest(\".\", \"tests\", \"--collect-only\")\n     result.stdout.fnmatch_lines(\n         [\n             \"collected 2 items\",\n-            \"<Package tests>\",\n-            \"  <Module __init__.py>\",\n-            \"    <Function test_init>\",\n-            \"  <Module test_foo.py>\",\n-            \"    <Function test_foo>\",\n+            \"<Dir *>\",\n+            \"  <Package tests>\",\n+            \"    <Module __init__.py>\",\n+            \"      <Function test_init>\",\n+            \"    <Module test_foo.py>\",\n+            \"      <Function test_foo>\",\n         ]\n     )\n     result = pytester.runpytest(\"./tests/test_foo.py\", \"--collect-only\")\n     result.stdout.fnmatch_lines(\n-        [\"<Package tests>\", \"  <Module test_foo.py>\", \"    <Function test_foo>\"]\n+        [\n+            \"<Dir *>\",\n+            \"  <Package tests>\",\n+            \"    <Module test_foo.py>\",\n+            \"      <Function test_foo>\",\n+        ]\n     )\n     result.stdout.no_fnmatch_line(\"*test_init*\")\n     result = pytester.runpytest(\"./tests/__init__.py\", \"--collect-only\")\n     result.stdout.fnmatch_lines(\n-        [\"<Package tests>\", \"  <Module __init__.py>\", \"    <Function test_init>\"]\n+        [\n+            \"<Dir *>\",\n+            \"  <Package tests>\",\n+            \"    <Module __init__.py>\",\n+            \"      <Function test_init>\",\n+        ]\n     )\n     result.stdout.no_fnmatch_line(\"*test_foo*\")\n "
+    },
+    {
+      "sha": "18022977ca31d205dfd9f217fec1fd403315f73e",
+      "filename": "testing/test_config.py",
+      "status": "modified",
+      "additions": 2,
+      "deletions": 1,
+      "changes": 3,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Ftest_config.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Ftest_config.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_config.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -1966,7 +1966,8 @@ def test_config_blocked_default_plugins(pytester: Pytester, plugin: str) -> None\n         assert result.ret == ExitCode.USAGE_ERROR\n         result.stderr.fnmatch_lines(\n             [\n-                \"ERROR: found no collectors for */test_config_blocked_default_plugins.py\",\n+                \"ERROR: not found: */test_config_blocked_default_plugins.py\",\n+                \"(no match in any of *<Dir *>*\",\n             ]\n         )\n         return"
+    },
+    {
+      "sha": "609f73d68eba4c104c0793fe45e969cbe79bf1f9",
+      "filename": "testing/test_mark.py",
+      "status": "modified",
+      "additions": 20,
+      "deletions": 13,
+      "changes": 33,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Ftest_mark.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Ftest_mark.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_mark.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -871,17 +871,30 @@ def test_one(): assert 1\n         deselected_tests = dlist[0].items\n         assert len(deselected_tests) == 1\n \n-    def test_no_match_directories_outside_the_suite(self, pytester: Pytester) -> None:\n+    def test_no_match_directories_outside_the_suite(\n+        self,\n+        pytester: Pytester,\n+        monkeypatch: pytest.MonkeyPatch,\n+    ) -> None:\n         \"\"\"`-k` should not match against directories containing the test suite (#7040).\"\"\"\n-        test_contents = \"\"\"\n-            def test_aaa(): pass\n-            def test_ddd(): pass\n-        \"\"\"\n+        pytester.makefile(\n+            **{\n+                \"suite/pytest\": \"\"\"[pytest]\"\"\",\n+            },\n+            ext=\".ini\",\n+        )\n         pytester.makepyfile(\n-            **{\"ddd/tests/__init__.py\": \"\", \"ddd/tests/test_foo.py\": test_contents}\n+            **{\n+                \"suite/ddd/tests/__init__.py\": \"\",\n+                \"suite/ddd/tests/test_foo.py\": \"\"\"\n+                def test_aaa(): pass\n+                def test_ddd(): pass\n+            \"\"\",\n+            }\n         )\n+        monkeypatch.chdir(pytester.path / \"suite\")\n \n-        def get_collected_names(*args):\n+        def get_collected_names(*args: str) -> List[str]:\n             _, rec = pytester.inline_genitems(*args)\n             calls = rec.getcalls(\"pytest_collection_finish\")\n             assert len(calls) == 1\n@@ -893,12 +906,6 @@ def get_collected_names(*args):\n         # do not collect anything based on names outside the collection tree\n         assert get_collected_names(\"-k\", pytester._name) == []\n \n-        # \"-k ddd\" should only collect \"test_ddd\", but not\n-        # 'test_aaa' just because one of its parent directories is named \"ddd\";\n-        # this was matched previously because Package.name would contain the full path\n-        # to the package\n-        assert get_collected_names(\"-k\", \"ddd\") == [\"test_ddd\"]\n-\n \n class TestMarkDecorator:\n     @pytest.mark.parametrize("
+    },
+    {
+      "sha": "627ea1ed24fb994bf7c5743798f99633355697bf",
+      "filename": "testing/test_reports.py",
+      "status": "modified",
+      "additions": 3,
+      "deletions": 3,
+      "changes": 6,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Ftest_reports.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Ftest_reports.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_reports.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -304,9 +304,9 @@ def test_a():\n             report = reports[1]\n         else:\n             assert report_class is CollectReport\n-            # two collection reports: session and test file\n+            # three collection reports: session, test file, directory\n             reports = reprec.getreports(\"pytest_collectreport\")\n-            assert len(reports) == 2\n+            assert len(reports) == 3\n             report = reports[1]\n \n         def check_longrepr(longrepr: ExceptionChainRepr) -> None:\n@@ -471,7 +471,7 @@ def test_b(): pass\n         )\n         reprec = pytester.inline_run()\n         reports = reprec.getreports(\"pytest_collectreport\")\n-        assert len(reports) == 2\n+        assert len(reports) == 3\n         for rep in reports:\n             data = pytestconfig.hook.pytest_report_to_serializable(\n                 config=pytestconfig, report=rep"
+    },
+    {
+      "sha": "c8b646857e73f984290fef22abda147fe4cf9368",
+      "filename": "testing/test_runner.py",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "changes": 2,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Ftest_runner.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Ftest_runner.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_runner.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -1006,7 +1006,7 @@ def test_longreprtext_collect_skip(self, pytester: Pytester) -> None:\n         )\n         rec = pytester.inline_run()\n         calls = rec.getcalls(\"pytest_collectreport\")\n-        _, call = calls\n+        _, call, _ = calls\n         assert isinstance(call.report.longrepr, tuple)\n         assert \"Skipped\" in call.report.longreprtext\n "
+    },
+    {
+      "sha": "136e85eb64053f2102550aea33b8777c42d55115",
+      "filename": "testing/test_session.py",
+      "status": "modified",
+      "additions": 13,
+      "deletions": 10,
+      "changes": 23,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Ftest_session.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Ftest_session.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_session.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -172,8 +172,9 @@ def test_one(): pass\n         except pytest.skip.Exception:  # pragma: no cover\n             pytest.fail(\"wrong skipped caught\")\n         reports = reprec.getreports(\"pytest_collectreport\")\n-        assert len(reports) == 1\n-        assert reports[0].skipped\n+        # Session, Dir\n+        assert len(reports) == 2\n+        assert reports[1].skipped\n \n \n class TestNewSession(SessionTests):\n@@ -357,9 +358,10 @@ def test_2(): pass\n     )\n     result.stdout.fnmatch_lines(\n         [\n-            \"<Module d/test_it.py>\",\n-            \"  <Function test_1>\",\n-            \"  <Function test_2>\",\n+            \"  <Dir d>\",\n+            \"    <Module test_it.py>\",\n+            \"      <Function test_1>\",\n+            \"      <Function test_2>\",\n         ],\n         consecutive=True,\n     )\n@@ -373,11 +375,12 @@ def test_2(): pass\n     )\n     result.stdout.fnmatch_lines(\n         [\n-            \"<Module d/test_it.py>\",\n-            \"  <Function test_1>\",\n-            \"  <Function test_2>\",\n-            \"  <Function test_1>\",\n-            \"  <Function test_2>\",\n+            \"  <Dir d>\",\n+            \"    <Module test_it.py>\",\n+            \"      <Function test_1>\",\n+            \"      <Function test_2>\",\n+            \"      <Function test_1>\",\n+            \"      <Function test_2>\",\n         ],\n         consecutive=True,\n     )"
+    },
+    {
+      "sha": "12c80f9b8b88a68dd7e6a1ee245148eac2bf07e7",
+      "filename": "testing/test_terminal.py",
+      "status": "modified",
+      "additions": 18,
+      "deletions": 13,
+      "changes": 31,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Ftest_terminal.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/e1c66ab0ad8eda13e5552dfc939e07d7290ecd39/testing%2Ftest_terminal.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_terminal.py?ref=e1c66ab0ad8eda13e5552dfc939e07d7290ecd39",
+      "patch": "@@ -451,7 +451,11 @@ def test_func():\n         )\n         result = pytester.runpytest(\"--collect-only\")\n         result.stdout.fnmatch_lines(\n-            [\"<Module test_collectonly_basic.py>\", \"  <Function test_func>\"]\n+            [\n+                \"<Dir test_collectonly_basic0>\",\n+                \"  <Module test_collectonly_basic.py>\",\n+                \"    <Function test_func>\",\n+            ]\n         )\n \n     def test_collectonly_skipped_module(self, pytester: Pytester) -> None:\n@@ -480,14 +484,15 @@ def test_with_description():\n         result = pytester.runpytest(\"--collect-only\", \"--verbose\")\n         result.stdout.fnmatch_lines(\n             [\n-                \"<YamlFile test1.yaml>\",\n-                \"  <YamlItem test1.yaml>\",\n-                \"<Module test_collectonly_displays_test_description.py>\",\n-                \"  <Function test_with_description>\",\n-                \"    This test has a description.\",\n-                \"    \",\n-                \"    more1.\",\n-                \"      more2.\",\n+                \"<Dir test_collectonly_displays_test_description0>\",\n+                \"  <YamlFile test1.yaml>\",\n+                \"    <YamlItem test1.yaml>\",\n+                \"  <Module test_collectonly_displays_test_description.py>\",\n+                \"    <Function test_with_description>\",\n+                \"      This test has a description.\",\n+                \"      \",\n+                \"      more1.\",\n+                \"        more2.\",\n             ],\n             consecutive=True,\n         )\n@@ -2001,9 +2006,9 @@ def test_normal_verbosity(self, pytester: Pytester, test_files) -> None:\n         result = pytester.runpytest(\"-o\", \"console_output_style=classic\")\n         result.stdout.fnmatch_lines(\n             [\n+                f\"sub{os.sep}test_three.py .F.\",\n                 \"test_one.py .\",\n                 \"test_two.py F\",\n-                f\"sub{os.sep}test_three.py .F.\",\n                 \"*2 failed, 3 passed in*\",\n             ]\n         )\n@@ -2012,18 +2017,18 @@ def test_verbose(self, pytester: Pytester, test_files) -> None:\n         result = pytester.runpytest(\"-o\", \"console_output_style=classic\", \"-v\")\n         result.stdout.fnmatch_lines(\n             [\n-                \"test_one.py::test_one PASSED\",\n-                \"test_two.py::test_two FAILED\",\n                 f\"sub{os.sep}test_three.py::test_three_1 PASSED\",\n                 f\"sub{os.sep}test_three.py::test_three_2 FAILED\",\n                 f\"sub{os.sep}test_three.py::test_three_3 PASSED\",\n+                \"test_one.py::test_one PASSED\",\n+                \"test_two.py::test_two FAILED\",\n                 \"*2 failed, 3 passed in*\",\n             ]\n         )\n \n     def test_quiet(self, pytester: Pytester, test_files) -> None:\n         result = pytester.runpytest(\"-o\", \"console_output_style=classic\", \"-q\")\n-        result.stdout.fnmatch_lines([\".F.F.\", \"*2 failed, 3 passed in*\"])\n+        result.stdout.fnmatch_lines([\".F..F\", \"*2 failed, 3 passed in*\"])\n \n \n class TestProgressOutputStyle:"
+    }
+  ],
+  "ground_truth": [
+    {
+      "path": "testing/test_config.py",
+      "line": 1970,
+      "body": "this error seems a little worse, but thats good for a follow up"
+    },
+    {
+      "path": "testing/test_collection.py",
+      "line": 493,
+      "body": "this one seems off - the path there should match the nodeid"
+    },
+    {
+      "path": "testing/acceptance_test.py",
+      "line": 242,
+      "body": "this changes the meaning of the test - the myfile nodes are important"
+    },
+    {
+      "path": "testing/test_config.py",
+      "line": 1970,
+      "body": "The difference is because previously there were no collectors in the path to the `Module`, so a generic fallback message was shown, but now there is the `Dir` so the message is a bit more informative.\r\n\r\nBefore:\r\n\r\n```\r\nERROR: found no collectors for /home/ran/src/pytest/testing/test_compat.py\r\n```\r\n\r\nAfter:\r\n\r\n```\r\nERROR: not found: /home/ran/src/pytest/testing/test_compat.py\r\n(no match in any of [<Dir testing>])\r\n```\r\n\r\nThe relevant code in `Session.perform_collect` is:\r\n\r\n```py\r\n            if self._notfound:\r\n                errors = []\r\n                for arg, collectors in self._notfound:\r\n                    if collectors:\r\n                        errors.append(\r\n                            f\"not found: {arg}\\n(no match in any of {collectors!r})\"\r\n                        )\r\n                    else:\r\n                        errors.append(f\"found no collectors for {arg}\")\r\n\r\n                raise UsageError(*errors)\r\n```"
+    },
+    {
+      "path": "testing/test_collection.py",
+      "line": 493,
+      "body": "The old tree was\r\n\r\n```\r\n<Session>\r\n  <Module test_collect_topdir.py>\r\n```\r\n\r\nNow it's \r\n\r\n```\r\n<Session>\r\n  <Dir test_collect_topdir0>\r\n    <Module test_collect_topdir.py>\r\n```\r\n\r\nSo now the collection (with `genitems=False`) collects the `Dir` not the `Module`.\r\n\r\nI'm not sure what was the original purpose of this test (it goes back to e2683f4538d8faf663be5acc3874051c3486adde) but the change here is intentional. Do you think there is something that relies on this?"
+    },
+    {
+      "path": "testing/acceptance_test.py",
+      "line": 242,
+      "body": "Previous tree:\r\n\r\n```\r\n<MyFile test_issue88_initial_file_multinodes.py>\r\n  <MyItem hello>\r\n<Module test_issue88_initial_file_multinodes.py>\r\n  <Function test_hello>\r\n```\r\n\r\nNew tree:\r\n\r\n```\r\n<Dir test_issue88_initial_file_multinodes0>\r\n  <Module test_issue88_initial_file_multinodes.py>\r\n    <Function test_hello>\r\n  <MyFile test_issue88_initial_file_multinodes.py>\r\n    <MyItem hello>\r\n```\r\n\r\nI can't say exactly why the order changes but I can check if it's important. I'm not sure what issue88 is, I don't think it's github #88."
+    },
+    {
+      "path": "testing/test_config.py",
+      "line": 1970,
+      "body": "Thanks for the clarification "
+    },
+    {
+      "path": "testing/acceptance_test.py",
+      "line": 242,
+      "body": "The example code deals with custom collection "
+    },
+    {
+      "path": "testing/test_collection.py",
+      "line": 493,
+      "body": "Perform collect towards nodes ids yielded the concrete files, my understanding is that it ought to keep doing that "
+    },
+    {
+      "path": "testing/acceptance_test.py",
+      "line": 242,
+      "body": "The custom collector `MyFile` still works as before, just the collector/item order is changed. Do you think this test specifically checks for a regression in the order?"
+    },
+    {
+      "path": "testing/acceptance_test.py",
+      "line": 242,
+      "body": "The Test specifically Checks for the custom collection being applied,the change removes that "
+    },
+    {
+      "path": "testing/acceptance_test.py",
+      "line": 242,
+      "body": "Can you explain what you mean by \"custom collection being applied\"?"
+    },
+    {
+      "path": "testing/test_collection.py",
+      "line": 493,
+      "body": "Do you mean that you think it should not emit `Session -> Dir -> Module` here, but `Session -> Module` like before?\r\n\r\nI'll try to explain the rationale. Consider for example\r\n\r\n```\r\nrepo/\r\n  pytest.ini\r\n  tests/\r\n     test_it.py\r\n```\r\n\r\nBefore this PR, the tree is\r\n\r\n```xml\r\n<Module tests/test_it.py>\r\n  <Function test_it>\r\n```\r\n\r\nbut if I add a file `tests/__init__.py` (i.e. make `tests` a package), it becomes\r\n\r\n```xml\r\n<Package tests>\r\n  <Module test_it.py>\r\n    <Function test_it>\r\n```\r\n\r\nThe idea in this PR is to remove the inconsistency with `Package`. In this PR, without `__init__.py` the tree is\r\n\r\n```xml\r\n<Dir repo>\r\n  <Dir tests>\r\n    <Module test_it.py>\r\n      <Function test_it>\r\n```\r\n\r\nand with `__init__.py`\r\n\r\n```xml\r\n<Dir repo>\r\n  <Package tests>\r\n    <Module test_it.py>\r\n      <Function test_it>\r\n```\r\n\r\nNow `Package` is the `python`-plugin-ified `Directory`."
+    },
+    {
+      "path": "testing/test_collection.py",
+      "line": 493,
+      "body": "The purpose of that function is to go from a list of nodeids/paths to the initial collectors\n\nAka the concrete \"top-level\" fs collectors that are files\n\nThe alternative is to ensure all directory collection is limited to filtering of the initial args "
+    },
+    {
+      "path": "testing/acceptance_test.py",
+      "line": 242,
+      "body": "The now changed Test would miss if the custom collector stopped working "
+    },
+    {
+      "path": "src/_pytest/main.py",
+      "line": 503,
+      "body": "Given `self.ihook` is a property which calls `self.session.gethookproxy`, would it be better to move this outside the loop?"
+    },
+    {
+      "path": "src/_pytest/main.py",
+      "line": 513,
+      "body": "Same comment as above."
+    },
+    {
+      "path": "changelog/7777.breaking.rst",
+      "line": 35,
+      "body": "Collecting from outside the root dir is discouraged? If so perhaps make it more explicit:\r\n\r\n```suggestion\r\nFor files outside the rootdir, only the immediate directory/package is collected (collecting from outside the rootdir is discouraged).\r\n```\r\n\r\nor:\r\n\r\n```suggestion\r\nFor files outside the rootdir, only the immediate directory/package is collected -- note however that collecting from outside the rootdir is discouraged.\r\n```"
+    },
+    {
+      "path": "changelog/7777.breaking.rst",
+      "line": 88,
+      "body": "Overall awesome notes explaining the change!\r\n\r\nHowever it is not immediately obvious what is \"breaking\" about it, we should add a complementary note at the bottom mentioning which plugin/code might break due to this change, like \"because of this changes, any code which traverses the collection tree might need update, or those that depend on output of --collection-only, ...\" etc."
+    },
+    {
+      "path": "doc/en/example/customdirectory.rst",
+      "line": 18,
+      "body": "```suggestion\r\nHere is an example ``conftest.py`` plugin that allows directories to contain a ``manifest.json`` file,\r\n```"
+    },
+    {
+      "path": "doc/en/example/customdirectory/conftest.py",
+      "line": 13,
+      "body": "```suggestion\r\n        # The standard pytest behavior is to loop over all `test_*.py` files and call `pytest_collect_file` on each file,\r\n        # this collector instead reads the `manifest.json` file and only calls `pytest_collect_file` for the\r\n        # files defined there.\r\n        manifest_path = self.path / \"manifest.json\"\r\n```"
+    },
+    {
+      "path": "doc/en/example/customdirectory/conftest.py",
+      "line": 28,
+      "body": "```suggestion\r\n    # Use our custom collector for directories containing a `mainfest.json` file.\r\n    if path.joinpath(\"manifest.json\").is_file():\r\n        return ManifestDirectory.from_parent(parent=parent, path=path)\r\n    # Otherwise fallback to the standard behavior.\r\n    return None\r\n```"
+    },
+    {
+      "path": "src/_pytest/hookspec.py",
+      "line": 301,
+      "body": "```suggestion\r\n    :param path: The path to analyze.\r\n    \r\n    See :ref:`custom directory collectors` for an example of use of this hook.\r\n```"
+    },
+    {
+      "path": "src/_pytest/main.py",
+      "line": 484,
+      "body": "I think it would be nice to include some rationale for the existence of Dir/Directory as explained in https://github.com/pytest-dev/pytest/issues/7777#issuecomment-1595817292."
+    },
+    {
+      "path": "src/_pytest/nodes.py",
+      "line": 686,
+      "body": "I think it would be nice to include some rationale for the existence of Dir/Directory as explained in https://github.com/pytest-dev/pytest/issues/7777#issuecomment-1595817292."
+    },
+    {
+      "path": "src/_pytest/main.py",
+      "line": 475,
+      "body": "I think worth adding a note here explaining that directories with `__init__.py` files/Packages are collected by the Python plugin -- I understand that technically this is not part of the responsibilities of this class, but painting the overall picture here is helpful I think."
+    },
+    {
+      "path": "src/_pytest/main.py",
+      "line": 621,
+      "body": "Perhaps this is more direct/clearer?\r\n\r\n```suggestion\r\n        An initial path is a path explicitly given to pytest on the command line.\r\n```"
+    },
+    {
+      "path": "src/_pytest/main.py",
+      "line": 668,
+      "body": "Do we want to ensure `isinstance(col, nodes.Collector)` if col is not None? You mentioned in https://github.com/pytest-dev/pytest/issues/7777#issuecomment-1595817292 we should make this check explicitly."
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 727,
+      "body": "Move `ihook` to outside the loop?"
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 737,
+      "body": "Move `ihook` to outside the loop?"
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 731,
+      "body": "From this point onward `Dir.collect` and `Package.collect` are essentially identical: can we move this to a common function somewhere and reuse it in both places? They are non-trivial and worth avoiding the duplication IMHO."
+    },
+    {
+      "path": "testing/acceptance_test.py",
+      "line": 242,
+      "body": "If the custom collector stops working, the `\"*MyFile*test_issue88*\"` won't match, and the test will fail, unless I'm missing something?"
+    },
+    {
+      "path": "src/_pytest/main.py",
+      "line": 503,
+      "body": "`ihook` returns a `FSHookProxy` with a static `remove_mods`, and is thus very sensitive to its placement. It's something I'm hoping to improve in the future (though it's not easy to make something fast for this in pluggy), but with how pytest is now `ihook` cannot be safely hoisted."
+    },
+    {
+      "path": "src/_pytest/main.py",
+      "line": 513,
+      "body": "Same here, it's not safe to hoist `ihook` out of loops"
+    },
+    {
+      "path": "testing/acceptance_test.py",
+      "line": 242,
+      "body": "apologies, i did misread the diff and thus missinterpreted the order of things wrongly"
+    },
+    {
+      "path": "src/_pytest/main.py",
+      "line": 503,
+      "body": "i believe within the loop it is safe as the remove_mods depends on self.fspath\r\n"
+    },
+    {
+      "path": "src/_pytest/main.py",
+      "line": 668,
+      "body": "In the end I think it's better not to enforce this, if someone really doesn't want to. Also `pytest_collect_file` doesn't. Instead, I'll add a note (also to `pytest_collect_file`):\r\n\r\n> For best results, the returned collector should be a subclass of  :class:`~pytest.Directory`, but this is not required."
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 731,
+      "body": "I live by the [Rule of three](https://en.wikipedia.org/wiki/Rule_of_three_(computer_programming)) :grinning: \r\n\r\nBut more seriously, I started out with this, with some common private function on `Directory`, but this stuff shouldn't be on `Directory` so I relented.\r\n\r\nMy goal is to simplify this loop such that it doesn't *need* deduplication because it's simple enough (which will also help plugins to implement it correctly). This things that pop out are:\r\n\r\n- The `__pycache__` check can move to `pytest_ignore_collect` -- slight performance hit but probably minor.\r\n- If we handle the `ihook` issue we can hoist it out.\r\n- If `Path(direntry.path)` is not super slow we can hoist it out\r\n- Maybe the `isinitpath` check can move to `pytest_ignore_collect` as well?"
+    },
+    {
+      "path": "src/_pytest/main.py",
+      "line": 503,
+      "body": "IIRC the exact problem was with conftest plugins that are loaded after the `ihook` and are then not filtered out by `remove_mods`"
+    },
+    {
+      "path": "testing/test_collection.py",
+      "line": 493,
+      "body": "OK I understand what you're saying now. `perform_collect` still does this in this PR.\r\n\r\nThe test is a bit weird. Basically it runs `session.perform_collect([\"\"])`. What is the initial collector for this? From a quick test, pytest treats this like `pytest .` i.e. current directory. So the new behavior seems right to me. Previously it picked out the test file simply because it was the first and there was no intermediary node.\r\n\r\nFor illustration, if I add an `__init__.py` file *in main* (not this PR),\r\n\r\n```diff\r\ndiff --git a/testing/test_collection.py b/testing/test_collection.py\r\nindex ca2e2b731..424bb9933 100644\r\n--- a/testing/test_collection.py\r\n+++ b/testing/test_collection.py\r\n@@ -478,6 +478,7 @@ class TestCustomConftests:\r\n class TestSession:\r\n     def test_collect_topdir(self, pytester: Pytester) -> None:\r\n         p = pytester.makepyfile(\"def test_func(): pass\")\r\n+        pytester.makepyfile(__init__=\"\")\r\n         id = \"::\".join([p.name, \"test_func\"])\r\n         # XXX migrate to collectonly? (see below)\r\n         config = pytester.parseconfig(id)\r\n```\r\n\r\nthen `colitems[0]` is the `Package`."
+    },
+    {
+      "path": "src/_pytest/main.py",
+      "line": 503,
+      "body": "my rough understanding is, with the usage if directories, conftests don't get added until after the collect phase,\r\nas such it presents as safe from my perspective\r\n\r\ndo we consider conftests in packages at their construction or at their collection?"
+    },
+    {
+      "path": "src/_pytest/main.py",
+      "line": 503,
+      "body": "After taking a second and third look at this, I've made a change which removes an ugly hack from this PR, allows the hoisting, and **removes conftest loading from `gethookproxy`** << this has been a real pain in my neck.\r\n\r\nRecap (a little complicated, sorry):\r\n\r\n### Current main\r\n\r\nIn current main, calls to `gethookproxy`/`ihook` are the trigger for loading non-initial conftests. This basically means that conftest loading is done almost as a random side-effect, uncontrolled and very non-obvious. And it also dashes any hope of making `gethookproxy` faster (`gethookproxy` shows up prominently in pytest profiles).\r\n\r\nI've wanted to improve this for a while, #11268 was the latest step towards that.\r\n\r\n### PR before change\r\n\r\nIn this PR, I ran into a problem.\r\n\r\nPreviously, `Session` and `Package` did all of the directory traversals inside of their `collect`, which loaded the conftests as a side effect. If the conftest loading failed, it will occur inside of the `collect()` and cause it to be reported as a failure.\r\n\r\nNow I've changed things such that `Session.collect` and `Package.collect` no longer recurse, but just collect their immediate descendants, and `genitems` does the recursive expansion work.\r\n\r\nThe problem though is that `genitems()` doesn't run inside of specific collector's `collect` context. So when it loads a conftest, and the conftest loading fails, the exception isn't handled by any `CollectReport` and causes an internal error instead.\r\n\r\nThe way I've fixed this problem is by loading the conftests eagerly in a `pytest_collect_directory` post-wrapper, but only during `genitems` to make sure the directory is actually selected.\r\n\r\nThis solution in turn caused the conftests to be collected *too early*; specifically, the plugins are loaded during the parent's `collect()`, one after the other as the directory entries are collected. So when the `ihook` is hoisted out of the loop, new plugins are loaded inside the loop, and due to the way the hook proxy works, they are added to the `ihook` even though they're supposed to be scoped to the child collectors. So no hoisting.\r\n\r\n### PR after change\r\n\r\nNow I've come up with a better solution: since now the collection tree actually reflects the filesystem tree, what we really want is to load the conftest of a directory right before we run its `collect()`. A conftest can affect a directory's `collect()` (e.g. with a `pytest_ignore_collect` hookimpl), but it cannot affect how the directory node itself is collected. So I just moved the conftest loading to be done right before calling `collect`, but still inside the `CollectReport` context.\r\n\r\nThis allows the hoisting, and also removes conftest loading from `gethookproxy` since it's no longer necessary. And it will probably enable further cleanups. So I'm happy with it."
+    },
+    {
+      "path": "src/_pytest/python.py",
+      "line": 731,
+      "body": "Sounds good!"
+    },
+    {
+      "path": "src/_pytest/nodes.py",
+      "line": 686,
+      "body": "Ping here @bluetech --  in case my comment was not clear, I think we should highlight why we have `Dir` and `Directory`, given the names are so similar."
+    },
+    {
+      "path": "src/_pytest/nodes.py",
+      "line": 686,
+      "body": "Changes the docstrings a bit, I tried to leave enough breadcrumbs for the reader of any of the 3 classes `Directory`, `Dir` and `Package` to figure out how they relate."
+    }
+  ]
+}

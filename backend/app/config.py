@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     GITHUB_WEBHOOK_SECRET: str
     GITHUB_PRIVATE_KEY_PATH: str
     GITHUB_TEST_INSTALLATION_ID: str = ""
-
+    GITHUB_EVAL_TOKEN: str = ""
     class Config:
         env_file = ".env"
 

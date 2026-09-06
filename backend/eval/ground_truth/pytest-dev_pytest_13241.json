@@ -1,0 +1,427 @@
+{
+  "repo": "pytest-dev/pytest",
+  "pr_number": 13241,
+  "title": "add paramspec to callable forms of raises/warns/deprecated_call, rewrite tests to use CM form",
+  "body": "## deprecation\r\n~~Deprecates the legacy callable forms for `pytest.raises`, `pytest.warns` and `pytest.deprecated_call`, and~~ replaces all instances in the code base of them aside from code specifically for testing them.\r\n\r\n## paramspec\r\n`pytest.raises`, `warns` & `deprecated_call` previously typed `*args` and `**kwargs` as `Any` in the legacy callable form, so this did not raise errors:\r\n\r\n```python\r\ndef foo(x: int) -> None:\r\n    raise ValueError\r\nraises(ValueError, foo, None)\r\n```\r\nbut now it will give `call-overload`.\r\n\r\nIt also makes it possible to pass `func` as a kwarg, which the type hints previously showed as possible, but it didn't work.\r\n\r\n\r\nIt's possible that `func` (and the expected type?) *should* be pos-only, as this looks quite weird:\r\n```python\r\nraises(1, 2, kwarg1=3, func=my_func, kwarg2=4, expected_exception=ValueError)\r\n```\r\nbut if somebody is dynamically generating parameters to send to `raises` then we probably shouldn't ban it needlessly; and we can't make `func` pos-only without making `expected_exception` pos-only, and that could break backwards compatibility.\r\n\r\n\r\n- [x] Include documentation when adding new features.\r\n- [x] Include new tests or update existing tests when applicable.\r\n- [X] Allow maintainers to push and squash when merging my commits. Please uncheck this if you prefer to squash the commits yourself.\r\n- [x] Create a new changelog file in the `changelog` folder, with a name like `<ISSUE NUMBER>.<TYPE>.rst`. See [changelog/README.rst](https://github.com/pytest-dev/pytest/blob/main/changelog/README.rst) for details.\r\n\r\n\r\n\r\nNoticed while working on #13192 ",
+  "head_sha": "f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+  "files": [
+    {
+      "sha": "41ba55e280a6c294698a3fa93a74c9a6abfb1768",
+      "filename": "changelog/13241.improvement.rst",
+      "status": "added",
+      "additions": 2,
+      "deletions": 0,
+      "changes": 2,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/changelog%2F13241.improvement.rst",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/changelog%2F13241.improvement.rst",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/changelog%2F13241.improvement.rst?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -0,0 +1,2 @@\n+:func:`pytest.raises`, :func:`pytest.warns` and :func:`pytest.deprecated_call` now uses :class:`ParamSpec` for the type hint to the (old and not recommended) callable overload, instead of :class:`Any`. This allows type checkers to raise errors when passing incorrect function parameters.\n+``func`` can now also be passed as a kwarg, which the type hint previously showed as possible but didn't accept."
+    },
+    {
+      "sha": "84b1c99e181fc83cce47ec4cd3aa6f8e9e166b68",
+      "filename": "doc/en/conf.py",
+      "status": "modified",
+      "additions": 4,
+      "deletions": 0,
+      "changes": 4,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/doc%2Fen%2Fconf.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/doc%2Fen%2Fconf.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/doc%2Fen%2Fconf.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -102,6 +102,10 @@\n     # TypeVars\n     (\"py:class\", \"_pytest._code.code.E\"),\n     (\"py:class\", \"E\"),  # due to delayed annotation\n+    (\"py:class\", \"T\"),\n+    (\"py:class\", \"P\"),\n+    (\"py:class\", \"P.args\"),\n+    (\"py:class\", \"P.kwargs\"),\n     (\"py:class\", \"_pytest.fixtures.FixtureFunction\"),\n     (\"py:class\", \"_pytest.nodes._NodeType\"),\n     (\"py:class\", \"_NodeType\"),  # due to delayed annotation"
+    },
+    {
+      "sha": "5ae676cf59b271fd9c347a46f11ded2ae8dc6aee",
+      "filename": "doc/en/how-to/assert.rst",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 4,
+      "changes": 4,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/doc%2Fen%2Fhow-to%2Fassert.rst",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/doc%2Fen%2Fhow-to%2Fassert.rst",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/doc%2Fen%2Fhow-to%2Fassert.rst?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -322,13 +322,9 @@ will then execute the function with those arguments and assert that the given ex\n \n     pytest.raises(ValueError, func, x=-1)\n \n-The reporter will provide you with helpful output in case of failures such as *no\n-exception* or *wrong exception*.\n-\n This form was the original :func:`pytest.raises` API, developed before the ``with`` statement was\n added to the Python language. Nowadays, this form is rarely used, with the context-manager form (using ``with``)\n being considered more readable.\n-Nonetheless, this form is fully supported and not deprecated in any way.\n \n xfail mark and pytest.raises\n ~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+    },
+    {
+      "sha": "daaf8937e1a6df4eda5c9b30d8e7cb091933bfa1",
+      "filename": "doc/en/how-to/capture-warnings.rst",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 7,
+      "changes": 7,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/doc%2Fen%2Fhow-to%2Fcapture-warnings.rst",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/doc%2Fen%2Fhow-to%2Fcapture-warnings.rst",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/doc%2Fen%2Fhow-to%2Fcapture-warnings.rst?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -371,13 +371,6 @@ Some examples:\n     ...     warnings.warn(\"issue with foo() func\")\n     ...\n \n-You can also call :func:`pytest.warns` on a function or code string:\n-\n-.. code-block:: python\n-\n-    pytest.warns(expected_warning, func, *args, **kwargs)\n-    pytest.warns(expected_warning, \"func(*args, **kwargs)\")\n-\n The function also returns a list of all raised warnings (as\n ``warnings.WarningMessage`` objects), which you can query for\n additional information:"
+    },
+    {
+      "sha": "83d367d702494260c3dbcb3e7d91a54e03356df4",
+      "filename": "pyproject.toml",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 0,
+      "changes": 1,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/pyproject.toml",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/pyproject.toml",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/pyproject.toml?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -453,6 +453,7 @@ exclude_lines = [\n     '^\\s*case unreachable:',\n     '^\\s*assert_never\\(',\n     '^\\s*if TYPE_CHECKING:',\n+    '^\\s*(el)?if TYPE_CHECKING:',\n     '^\\s*@overload( |$)',\n     '^\\s*def .+: \\.\\.\\.$',\n     '^\\s*@pytest\\.mark\\.xfail',"
+    },
+    {
+      "sha": "23690a004701b015a1ebe1d3e0781ab607b5e053",
+      "filename": "src/_pytest/raises.py",
+      "status": "modified",
+      "additions": 6,
+      "deletions": 25,
+      "changes": 31,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/src%2F_pytest%2Fraises.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/src%2F_pytest%2Fraises.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/src%2F_pytest%2Fraises.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -95,14 +95,15 @@ def raises(*, check: Callable[[BaseException], bool]) -> RaisesExc[BaseException\n @overload\n def raises(\n     expected_exception: type[E] | tuple[type[E], ...],\n-    func: Callable[..., Any],\n-    *args: Any,\n-    **kwargs: Any,\n+    func: Callable[P, object],\n+    *args: P.args,\n+    **kwargs: P.kwargs,\n ) -> ExceptionInfo[E]: ...\n \n \n def raises(\n     expected_exception: type[E] | tuple[type[E], ...] | None = None,\n+    func: Callable[P, object] | None = None,\n     *args: Any,\n     **kwargs: Any,\n ) -> RaisesExc[BaseException] | ExceptionInfo[E]:\n@@ -237,25 +238,6 @@ def raises(\n \n         :ref:`assertraises` for more examples and detailed discussion.\n \n-    **Legacy form**\n-\n-    It is possible to specify a callable by passing a to-be-called lambda::\n-\n-        >>> raises(ZeroDivisionError, lambda: 1/0)\n-        <ExceptionInfo ...>\n-\n-    or you can specify an arbitrary callable with arguments::\n-\n-        >>> def f(x): return 1/x\n-        ...\n-        >>> raises(ZeroDivisionError, f, 0)\n-        <ExceptionInfo ...>\n-        >>> raises(ZeroDivisionError, f, x=0)\n-        <ExceptionInfo ...>\n-\n-    The form above is fully supported but discouraged for new code because the\n-    context manager form is regarded as more readable and less error-prone.\n-\n     .. note::\n         Similar to caught exception objects in Python, explicitly clearing\n         local references to returned ``ExceptionInfo`` objects can\n@@ -272,7 +254,7 @@ def raises(\n     \"\"\"\n     __tracebackhide__ = True\n \n-    if not args:\n+    if func is None and not args:\n         if set(kwargs) - {\"match\", \"check\", \"expected_exception\"}:\n             msg = \"Unexpected keyword arguments passed to pytest.raises: \"\n             msg += \", \".join(sorted(kwargs))\n@@ -289,11 +271,10 @@ def raises(\n             f\"Raising exceptions is already understood as failing the test, so you don't need \"\n             f\"any special code to say 'this should never raise an exception'.\"\n         )\n-    func = args[0]\n     if not callable(func):\n         raise TypeError(f\"{func!r} object (type: {type(func)}) must be callable\")\n     with RaisesExc(expected_exception) as excinfo:\n-        func(*args[1:], **kwargs)\n+        func(*args, **kwargs)\n     try:\n         return excinfo\n     finally:"
+    },
+    {
+      "sha": "c3cb10b7f08077bb2cdc45d04cf64a8d9b0db5ab",
+      "filename": "src/_pytest/recwarn.py",
+      "status": "modified",
+      "additions": 25,
+      "deletions": 22,
+      "changes": 47,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/src%2F_pytest%2Frecwarn.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/src%2F_pytest%2Frecwarn.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/src%2F_pytest%2Frecwarn.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -17,8 +17,11 @@\n \n \n if TYPE_CHECKING:\n+    from typing_extensions import ParamSpec\n     from typing_extensions import Self\n \n+    P = ParamSpec(\"P\")\n+\n import warnings\n \n from _pytest.deprecated import check_ispytest\n@@ -49,7 +52,7 @@ def deprecated_call(\n \n \n @overload\n-def deprecated_call(func: Callable[..., T], *args: Any, **kwargs: Any) -> T: ...\n+def deprecated_call(func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T: ...\n \n \n def deprecated_call(\n@@ -67,23 +70,23 @@ def deprecated_call(\n         >>> import pytest\n         >>> with pytest.deprecated_call():\n         ...    assert api_call_v2() == 200\n+        >>> with pytest.deprecated_call(match=\"^use v3 of this api$\") as warning_messages:\n+        ...    assert api_call_v2() == 200\n \n-    It can also be used by passing a function and ``*args`` and ``**kwargs``,\n-    in which case it will ensure calling ``func(*args, **kwargs)`` produces one of\n-    the warnings types above. The return value is the return value of the function.\n-\n-    In the context manager form you may use the keyword argument ``match`` to assert\n+    You may use the keyword argument ``match`` to assert\n     that the warning matches a text or regex.\n \n-    The context manager produces a list of :class:`warnings.WarningMessage` objects,\n-    one for each warning raised.\n+    The return value is a list of :class:`warnings.WarningMessage` objects,\n+    one for each warning emitted\n+    (regardless of whether it is an ``expected_warning`` or not).\n     \"\"\"\n     __tracebackhide__ = True\n-    if func is not None:\n-        args = (func, *args)\n-    return warns(\n-        (DeprecationWarning, PendingDeprecationWarning, FutureWarning), *args, **kwargs\n-    )\n+    dep_warnings = (DeprecationWarning, PendingDeprecationWarning, FutureWarning)\n+    if func is None:\n+        return warns(dep_warnings, *args, **kwargs)\n+\n+    with warns(dep_warnings):\n+        return func(*args, **kwargs)\n \n \n @overload\n@@ -97,16 +100,16 @@ def warns(\n @overload\n def warns(\n     expected_warning: type[Warning] | tuple[type[Warning], ...],\n-    func: Callable[..., T],\n-    *args: Any,\n-    **kwargs: Any,\n+    func: Callable[P, T],\n+    *args: P.args,\n+    **kwargs: P.kwargs,\n ) -> T: ...\n \n \n def warns(\n     expected_warning: type[Warning] | tuple[type[Warning], ...] = Warning,\n+    func: Callable[..., object] | None = None,\n     *args: Any,\n-    match: str | re.Pattern[str] | None = None,\n     **kwargs: Any,\n ) -> WarningsChecker | Any:\n     r\"\"\"Assert that code raises a particular class of warning.\n@@ -119,13 +122,13 @@ def warns(\n     each warning emitted (regardless of whether it is an ``expected_warning`` or not).\n     Since pytest 8.0, unmatched warnings are also re-emitted when the context closes.\n \n-    This function can be used as a context manager::\n+    This function should be used as a context manager::\n \n         >>> import pytest\n         >>> with pytest.warns(RuntimeWarning):\n         ...    warnings.warn(\"my warning\", RuntimeWarning)\n \n-    In the context manager form you may use the keyword argument ``match`` to assert\n+    The ``match`` keyword argument can be used to assert\n     that the warning matches a text or regex::\n \n         >>> with pytest.warns(UserWarning, match='must be 0 or None'):\n@@ -153,7 +156,8 @@ def warns(\n \n     \"\"\"\n     __tracebackhide__ = True\n-    if not args:\n+    if func is None and not args:\n+        match: str | re.Pattern[str] | None = kwargs.pop(\"match\", None)\n         if kwargs:\n             argnames = \", \".join(sorted(kwargs))\n             raise TypeError(\n@@ -162,11 +166,10 @@ def warns(\n             )\n         return WarningsChecker(expected_warning, match_expr=match, _ispytest=True)\n     else:\n-        func = args[0]\n         if not callable(func):\n             raise TypeError(f\"{func!r} object (type: {type(func)}) must be callable\")\n         with WarningsChecker(expected_warning, _ispytest=True):\n-            return func(*args[1:], **kwargs)\n+            return func(*args, **kwargs)\n \n \n class WarningsRecorder(warnings.catch_warnings):"
+    },
+    {
+      "sha": "be6f4197b269ac3d372ec5c1a42abee56e07d4c8",
+      "filename": "testing/_py/test_local.py",
+      "status": "modified",
+      "additions": 10,
+      "deletions": 5,
+      "changes": 15,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2F_py%2Ftest_local.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2F_py%2Ftest_local.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2F_py%2Ftest_local.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -620,7 +620,8 @@ def test_chdir_gone(self, path1):\n         p = path1.ensure(\"dir_to_be_removed\", dir=1)\n         p.chdir()\n         p.remove()\n-        pytest.raises(error.ENOENT, local)\n+        with pytest.raises(error.ENOENT):\n+            local()\n         assert path1.chdir() is None\n         assert os.getcwd() == str(path1)\n \n@@ -989,8 +990,10 @@ def test_locked_make_numbered_dir(self, tmpdir):\n                 assert numdir.new(ext=str(j)).check()\n \n     def test_error_preservation(self, path1):\n-        pytest.raises(EnvironmentError, path1.join(\"qwoeqiwe\").mtime)\n-        pytest.raises(EnvironmentError, path1.join(\"qwoeqiwe\").read)\n+        with pytest.raises(EnvironmentError):\n+            path1.join(\"qwoeqiwe\").mtime()\n+        with pytest.raises(EnvironmentError):\n+            path1.join(\"qwoeqiwe\").read()\n \n     # def test_parentdirmatch(self):\n     #    local.parentdirmatch('std', startmodule=__name__)\n@@ -1090,7 +1093,8 @@ def test_pyimport_check_filepath_consistency(self, monkeypatch, tmpdir):\n         pseudopath = tmpdir.ensure(name + \"123.py\")\n         mod.__file__ = str(pseudopath)\n         monkeypatch.setitem(sys.modules, name, mod)\n-        excinfo = pytest.raises(pseudopath.ImportMismatchError, p.pyimport)\n+        with pytest.raises(pseudopath.ImportMismatchError) as excinfo:\n+            p.pyimport()\n         modname, modfile, orig = excinfo.value.args\n         assert modname == name\n         assert modfile == pseudopath\n@@ -1388,7 +1392,8 @@ def test_stat_helpers(self, tmpdir, monkeypatch):\n \n     def test_stat_non_raising(self, tmpdir):\n         path1 = tmpdir.join(\"file\")\n-        pytest.raises(error.ENOENT, path1.stat)\n+        with pytest.raises(error.ENOENT):\n+            path1.stat()\n         res = path1.stat(raising=False)\n         assert res is None\n "
+    },
+    {
+      "sha": "e10139dee503e0957eae45c796a86249fc2b7145",
+      "filename": "testing/code/test_code.py",
+      "status": "modified",
+      "additions": 2,
+      "deletions": 4,
+      "changes": 6,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Fcode%2Ftest_code.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Fcode%2Ftest_code.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Fcode%2Ftest_code.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -85,10 +85,8 @@ def test_code_from_func() -> None:\n def test_unicode_handling() -> None:\n     value = \"\u0105\u0107\".encode()\n \n-    def f() -> None:\n-        raise ValueError(value)\n-\n-    excinfo = pytest.raises(ValueError, f)\n+    with pytest.raises(Exception) as excinfo:\n+        raise Exception(value)\n     str(excinfo)\n \n "
+    },
+    {
+      "sha": "d578148b554a2698859d65fbf211d0d51f9fd84f",
+      "filename": "testing/code/test_excinfo.py",
+      "status": "modified",
+      "additions": 87,
+      "deletions": 39,
+      "changes": 126,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Fcode%2Ftest_excinfo.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Fcode%2Ftest_excinfo.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Fcode%2Ftest_excinfo.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -222,25 +222,27 @@ def h():\n             g()\n             #\n \n-        excinfo = pytest.raises(ValueError, h)\n+        with pytest.raises(ValueError) as excinfo:\n+            h()\n         traceback = excinfo.traceback\n         ntraceback = traceback.filter(excinfo)\n         print(f\"old: {traceback!r}\")\n         print(f\"new: {ntraceback!r}\")\n \n         if matching:\n-            assert len(ntraceback) == len(traceback) - 2\n-        else:\n             # -1 because of the __tracebackhide__ in pytest.raises\n             assert len(ntraceback) == len(traceback) - 1\n+        else:\n+            assert len(ntraceback) == len(traceback)\n \n     def test_traceback_recursion_index(self):\n         def f(n):\n             if n < 10:\n                 n += 1\n             f(n)\n \n-        excinfo = pytest.raises(RecursionError, f, 8)\n+        with pytest.raises(RecursionError) as excinfo:\n+            f(8)\n         traceback = excinfo.traceback\n         recindex = traceback.recursionindex()\n         assert recindex == 3\n@@ -251,7 +253,8 @@ def f(n):\n                 raise RuntimeError(\"hello\")\n             f(n - 1)\n \n-        excinfo = pytest.raises(RuntimeError, f, 25)\n+        with pytest.raises(RuntimeError) as excinfo:\n+            f(25)\n         monkeypatch.delattr(excinfo.traceback.__class__, \"recursionindex\")\n         repr = excinfo.getrepr()\n         assert \"RuntimeError: hello\" in str(repr.reprcrash)\n@@ -273,8 +276,8 @@ def f(n: int) -> None:\n             except BaseException:\n                 reraise_me()\n \n-        excinfo = pytest.raises(RuntimeError, f, 8)\n-        assert excinfo is not None\n+        with pytest.raises(RuntimeError) as excinfo:\n+            f(8)\n         traceback = excinfo.traceback\n         recindex = traceback.recursionindex()\n         assert recindex is None\n@@ -294,7 +297,8 @@ def fail():\n \n         fail = log(log(fail))\n \n-        excinfo = pytest.raises(ValueError, fail)\n+        with pytest.raises(ValueError) as excinfo:\n+            fail()\n         assert excinfo.traceback.recursionindex() is None\n \n     def test_getreprcrash(self):\n@@ -312,14 +316,17 @@ def g():\n         def f():\n             g()\n \n-        excinfo = pytest.raises(ValueError, f)\n+        with pytest.raises(ValueError) as excinfo:\n+            f()\n         reprcrash = excinfo._getreprcrash()\n         assert reprcrash is not None\n         co = _pytest._code.Code.from_function(h)\n         assert reprcrash.path == str(co.path)\n         assert reprcrash.lineno == co.firstlineno + 1 + 1\n \n     def test_getreprcrash_empty(self):\n+        __tracebackhide__ = True\n+\n         def g():\n             __tracebackhide__ = True\n             raise ValueError\n@@ -328,12 +335,14 @@ def f():\n             __tracebackhide__ = True\n             g()\n \n-        excinfo = pytest.raises(ValueError, f)\n+        with pytest.raises(ValueError) as excinfo:\n+            f()\n         assert excinfo._getreprcrash() is None\n \n \n def test_excinfo_exconly():\n-    excinfo = pytest.raises(ValueError, h)\n+    with pytest.raises(ValueError) as excinfo:\n+        h()\n     assert excinfo.exconly().startswith(\"ValueError\")\n     with pytest.raises(ValueError) as excinfo:\n         raise ValueError(\"hello\\nworld\")\n@@ -343,7 +352,8 @@ def test_excinfo_exconly():\n \n \n def test_excinfo_repr_str() -> None:\n-    excinfo1 = pytest.raises(ValueError, h)\n+    with pytest.raises(ValueError) as excinfo1:\n+        h()\n     assert repr(excinfo1) == \"<ExceptionInfo ValueError() tblen=4>\"\n     assert str(excinfo1) == \"<ExceptionInfo ValueError() tblen=4>\"\n \n@@ -354,7 +364,8 @@ def __repr__(self):\n     def raises() -> None:\n         raise CustomException()\n \n-    excinfo2 = pytest.raises(CustomException, raises)\n+    with pytest.raises(CustomException) as excinfo2:\n+        raises()\n     assert repr(excinfo2) == \"<ExceptionInfo custom_repr tblen=2>\"\n     assert str(excinfo2) == \"<ExceptionInfo custom_repr tblen=2>\"\n \n@@ -366,7 +377,8 @@ def test_excinfo_for_later() -> None:\n \n \n def test_excinfo_errisinstance():\n-    excinfo = pytest.raises(ValueError, h)\n+    with pytest.raises(ValueError) as excinfo:\n+        h()\n     assert excinfo.errisinstance(ValueError)\n \n \n@@ -390,7 +402,8 @@ def test_excinfo_no_python_sourcecode(tmp_path: Path) -> None:\n     loader = jinja2.FileSystemLoader(str(tmp_path))\n     env = jinja2.Environment(loader=loader)\n     template = env.get_template(\"test.txt\")\n-    excinfo = pytest.raises(ValueError, template.render, h=h)\n+    with pytest.raises(ValueError) as excinfo:\n+        template.render(h=h)\n     for item in excinfo.traceback:\n         print(item)  # XXX: for some reason jinja.Template.render is printed in full\n         _ = item.source  # shouldn't fail\n@@ -754,7 +767,8 @@ def func1(m):\n                 raise ValueError(\"hello\\\\nworld\")\n         \"\"\"\n         )\n-        excinfo = pytest.raises(ValueError, mod.func1, \"m\" * 500)\n+        with pytest.raises(ValueError) as excinfo:\n+            mod.func1(\"m\" * 500)\n         excinfo.traceback = excinfo.traceback.filter(excinfo)\n         entry = excinfo.traceback[-1]\n         p = FormattedExcinfo(funcargs=True, truncate_args=True)\n@@ -777,7 +791,8 @@ def func1():\n                 raise ValueError(\"hello\\\\nworld\")\n         \"\"\"\n         )\n-        excinfo = pytest.raises(ValueError, mod.func1)\n+        with pytest.raises(ValueError) as excinfo:\n+            mod.func1()\n         excinfo.traceback = excinfo.traceback.filter(excinfo)\n         p = FormattedExcinfo()\n         reprtb = p.repr_traceback_entry(excinfo.traceback[-1])\n@@ -810,7 +825,8 @@ def func1(m, x, y, z):\n                 raise ValueError(\"hello\\\\nworld\")\n         \"\"\"\n         )\n-        excinfo = pytest.raises(ValueError, mod.func1, \"m\" * 90, 5, 13, \"z\" * 120)\n+        with pytest.raises(ValueError) as excinfo:\n+            mod.func1(\"m\" * 90, 5, 13, \"z\" * 120)\n         excinfo.traceback = excinfo.traceback.filter(excinfo)\n         entry = excinfo.traceback[-1]\n         p = FormattedExcinfo(funcargs=True)\n@@ -837,7 +853,8 @@ def func1(x, *y, **z):\n                 raise ValueError(\"hello\\\\nworld\")\n         \"\"\"\n         )\n-        excinfo = pytest.raises(ValueError, mod.func1, \"a\", \"b\", c=\"d\")\n+        with pytest.raises(ValueError) as excinfo:\n+            mod.func1(\"a\", \"b\", c=\"d\")\n         excinfo.traceback = excinfo.traceback.filter(excinfo)\n         entry = excinfo.traceback[-1]\n         p = FormattedExcinfo(funcargs=True)\n@@ -863,7 +880,8 @@ def entry():\n                 func1()\n         \"\"\"\n         )\n-        excinfo = pytest.raises(ValueError, mod.entry)\n+        with pytest.raises(ValueError) as excinfo:\n+            mod.entry()\n         p = FormattedExcinfo(style=\"short\")\n         reprtb = p.repr_traceback_entry(excinfo.traceback[-2])\n         lines = reprtb.lines\n@@ -898,7 +916,8 @@ def entry():\n                 func1()\n         \"\"\"\n         )\n-        excinfo = pytest.raises(ZeroDivisionError, mod.entry)\n+        with pytest.raises(ZeroDivisionError) as excinfo:\n+            mod.entry()\n         p = FormattedExcinfo(style=\"short\")\n         reprtb = p.repr_traceback_entry(excinfo.traceback[-3])\n         assert len(reprtb.lines) == 1\n@@ -923,7 +942,8 @@ def entry():\n                 func1()\n         \"\"\"\n         )\n-        excinfo = pytest.raises(ValueError, mod.entry)\n+        with pytest.raises(ValueError) as excinfo:\n+            mod.entry()\n         p = FormattedExcinfo(style=\"no\")\n         p.repr_traceback_entry(excinfo.traceback[-2])\n \n@@ -934,6 +954,7 @@ def entry():\n         assert not lines[1:]\n \n     def test_repr_traceback_tbfilter(self, importasmod):\n+        __tracebackhide__ = True\n         mod = importasmod(\n             \"\"\"\n             def f(x):\n@@ -942,7 +963,8 @@ def entry():\n                 f(0)\n         \"\"\"\n         )\n-        excinfo = pytest.raises(ValueError, mod.entry)\n+        with pytest.raises(ValueError) as excinfo:\n+            mod.entry()\n         p = FormattedExcinfo(tbfilter=True)\n         reprtb = p.repr_traceback(excinfo)\n         assert len(reprtb.reprentries) == 2\n@@ -963,7 +985,8 @@ def entry():\n                 func1()\n         \"\"\"\n         )\n-        excinfo = pytest.raises(ValueError, mod.entry)\n+        with pytest.raises(ValueError) as excinfo:\n+            mod.entry()\n         from _pytest._code.code import Code\n \n         with monkeypatch.context() as mp:\n@@ -980,6 +1003,7 @@ def entry():\n         assert last_lines[1] == \"E   ValueError: hello\"\n \n     def test_repr_traceback_and_excinfo(self, importasmod) -> None:\n+        __tracebackhide__ = True\n         mod = importasmod(\n             \"\"\"\n             def f(x):\n@@ -988,7 +1012,8 @@ def entry():\n                 f(0)\n         \"\"\"\n         )\n-        excinfo = pytest.raises(ValueError, mod.entry)\n+        with pytest.raises(ValueError) as excinfo:\n+            mod.entry()\n \n         styles: tuple[TracebackStyle, ...] = (\"long\", \"short\")\n         for style in styles:\n@@ -1008,6 +1033,7 @@ def entry():\n             assert repr.reprcrash.message == \"ValueError: 0\"\n \n     def test_repr_traceback_with_invalid_cwd(self, importasmod, monkeypatch) -> None:\n+        __tracebackhide__ = True\n         mod = importasmod(\n             \"\"\"\n             def f(x):\n@@ -1016,7 +1042,8 @@ def entry():\n                 f(0)\n         \"\"\"\n         )\n-        excinfo = pytest.raises(ValueError, mod.entry)\n+        with pytest.raises(ValueError) as excinfo:\n+            mod.entry()\n \n         p = FormattedExcinfo(abspath=False)\n \n@@ -1065,7 +1092,8 @@ def entry():\n                 raise ValueError()\n         \"\"\"\n         )\n-        excinfo = pytest.raises(ValueError, mod.entry)\n+        with pytest.raises(ValueError) as excinfo:\n+            mod.entry()\n         repr = excinfo.getrepr()\n         repr.addsection(\"title\", \"content\")\n         repr.toterminal(tw_mock)\n@@ -1079,7 +1107,8 @@ def entry():\n                 raise ValueError()\n         \"\"\"\n         )\n-        excinfo = pytest.raises(ValueError, mod.entry)\n+        with pytest.raises(ValueError) as excinfo:\n+            mod.entry()\n         repr = excinfo.getrepr()\n         assert repr.reprcrash is not None\n         assert repr.reprcrash.path.endswith(\"mod.py\")\n@@ -1098,7 +1127,8 @@ def entry():\n                 rec1(42)\n         \"\"\"\n         )\n-        excinfo = pytest.raises(RuntimeError, mod.entry)\n+        with pytest.raises(RuntimeError) as excinfo:\n+            mod.entry()\n \n         for style in (\"short\", \"long\", \"no\"):\n             p = FormattedExcinfo(style=\"short\")\n@@ -1115,7 +1145,8 @@ def entry():\n                 f(0)\n         \"\"\"\n         )\n-        excinfo = pytest.raises(ValueError, mod.entry)\n+        with pytest.raises(ValueError) as excinfo:\n+            mod.entry()\n \n         styles: tuple[TracebackStyle, ...] = (\"short\", \"long\", \"no\")\n         for style in styles:\n@@ -1138,6 +1169,7 @@ def toterminal(self, tw: TerminalWriter) -> None:\n         assert x == \"\u044f\"\n \n     def test_toterminal_long(self, importasmod, tw_mock):\n+        __tracebackhide__ = True\n         mod = importasmod(\n             \"\"\"\n             def g(x):\n@@ -1146,7 +1178,8 @@ def f():\n                 g(3)\n         \"\"\"\n         )\n-        excinfo = pytest.raises(ValueError, mod.f)\n+        with pytest.raises(ValueError) as excinfo:\n+            mod.f()\n         excinfo.traceback = excinfo.traceback.filter(excinfo)\n         repr = excinfo.getrepr()\n         repr.toterminal(tw_mock)\n@@ -1171,6 +1204,7 @@ def f():\n     def test_toterminal_long_missing_source(\n         self, importasmod, tmp_path: Path, tw_mock\n     ) -> None:\n+        __tracebackhide__ = True\n         mod = importasmod(\n             \"\"\"\n             def g(x):\n@@ -1179,7 +1213,8 @@ def f():\n                 g(3)\n         \"\"\"\n         )\n-        excinfo = pytest.raises(ValueError, mod.f)\n+        with pytest.raises(ValueError) as excinfo:\n+            mod.f()\n         tmp_path.joinpath(\"mod.py\").unlink()\n         excinfo.traceback = excinfo.traceback.filter(excinfo)\n         repr = excinfo.getrepr()\n@@ -1203,6 +1238,7 @@ def f():\n     def test_toterminal_long_incomplete_source(\n         self, importasmod, tmp_path: Path, tw_mock\n     ) -> None:\n+        __tracebackhide__ = True\n         mod = importasmod(\n             \"\"\"\n             def g(x):\n@@ -1211,7 +1247,8 @@ def f():\n                 g(3)\n         \"\"\"\n         )\n-        excinfo = pytest.raises(ValueError, mod.f)\n+        with pytest.raises(ValueError) as excinfo:\n+            mod.f()\n         tmp_path.joinpath(\"mod.py\").write_text(\"asdf\", encoding=\"utf-8\")\n         excinfo.traceback = excinfo.traceback.filter(excinfo)\n         repr = excinfo.getrepr()\n@@ -1235,13 +1272,15 @@ def f():\n     def test_toterminal_long_filenames(\n         self, importasmod, tw_mock, monkeypatch: MonkeyPatch\n     ) -> None:\n+        __tracebackhide__ = True\n         mod = importasmod(\n             \"\"\"\n             def f():\n                 raise ValueError()\n         \"\"\"\n         )\n-        excinfo = pytest.raises(ValueError, mod.f)\n+        with pytest.raises(ValueError) as excinfo:\n+            mod.f()\n         path = Path(mod.__file__)\n         monkeypatch.chdir(path.parent)\n         repr = excinfo.getrepr(abspath=False)\n@@ -1268,7 +1307,8 @@ def f():\n                 g('some_value')\n         \"\"\"\n         )\n-        excinfo = pytest.raises(ValueError, mod.f)\n+        with pytest.raises(ValueError) as excinfo:\n+            mod.f()\n         excinfo.traceback = excinfo.traceback.filter(excinfo)\n         repr = excinfo.getrepr(style=\"value\")\n         repr.toterminal(tw_mock)\n@@ -1312,6 +1352,7 @@ def foo():\n         assert file.getvalue()\n \n     def test_traceback_repr_style(self, importasmod, tw_mock):\n+        __tracebackhide__ = True\n         mod = importasmod(\n             \"\"\"\n             def f():\n@@ -1324,7 +1365,8 @@ def i():\n                 raise ValueError()\n         \"\"\"\n         )\n-        excinfo = pytest.raises(ValueError, mod.f)\n+        with pytest.raises(ValueError) as excinfo:\n+            mod.f()\n         excinfo.traceback = excinfo.traceback.filter(excinfo)\n         excinfo.traceback = _pytest._code.Traceback(\n             entry if i not in (1, 2) else entry.with_repr_style(\"short\")\n@@ -1359,6 +1401,7 @@ def i():\n         assert tw_mock.lines[20] == \":9: ValueError\"\n \n     def test_exc_chain_repr(self, importasmod, tw_mock):\n+        __tracebackhide__ = True\n         mod = importasmod(\n             \"\"\"\n             class Err(Exception):\n@@ -1377,7 +1420,8 @@ def h():\n                 if True: raise AttributeError()\n         \"\"\"\n         )\n-        excinfo = pytest.raises(AttributeError, mod.f)\n+        with pytest.raises(AttributeError) as excinfo:\n+            mod.f()\n         r = excinfo.getrepr(style=\"long\")\n         r.toterminal(tw_mock)\n         for line in tw_mock.lines:\n@@ -1458,6 +1502,7 @@ def test_exc_repr_chain_suppression(self, importasmod, mode, tw_mock):\n         - When the exception is raised with \"from None\"\n         - Explicitly suppressed with \"chain=False\" to ExceptionInfo.getrepr().\n         \"\"\"\n+        __tracebackhide__ = True\n         raise_suffix = \" from None\" if mode == \"from_none\" else \"\"\n         mod = importasmod(\n             f\"\"\"\n@@ -1470,7 +1515,8 @@ def g():\n                 raise ValueError()\n         \"\"\"\n         )\n-        excinfo = pytest.raises(AttributeError, mod.f)\n+        with pytest.raises(AttributeError) as excinfo:\n+            mod.f()\n         r = excinfo.getrepr(style=\"long\", chain=mode != \"explicit_suppress\")\n         r.toterminal(tw_mock)\n         for line in tw_mock.lines:\n@@ -1547,6 +1593,7 @@ def g():\n         )\n \n     def test_exc_chain_repr_cycle(self, importasmod, tw_mock):\n+        __tracebackhide__ = True\n         mod = importasmod(\n             \"\"\"\n             class Err(Exception):\n@@ -1565,7 +1612,8 @@ def unreraise():\n                     raise e.__cause__\n         \"\"\"\n         )\n-        excinfo = pytest.raises(ZeroDivisionError, mod.unreraise)\n+        with pytest.raises(ZeroDivisionError) as excinfo:\n+            mod.unreraise()\n         r = excinfo.getrepr(style=\"short\")\n         r.toterminal(tw_mock)\n         out = \"\\n\".join(line for line in tw_mock.lines if isinstance(line, str))"
+    },
+    {
+      "sha": "58005b340b61caa3534cd4dceb7c1e6e9dea30b4",
+      "filename": "testing/code/test_source.py",
+      "status": "modified",
+      "additions": 6,
+      "deletions": 3,
+      "changes": 9,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Fcode%2Ftest_source.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Fcode%2Ftest_source.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Fcode%2Ftest_source.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -211,7 +211,8 @@ def test_getstatementrange_out_of_bounds_py3(self) -> None:\n \n     def test_getstatementrange_with_syntaxerror_issue7(self) -> None:\n         source = Source(\":\")\n-        pytest.raises(SyntaxError, lambda: source.getstatementrange(0))\n+        with pytest.raises(SyntaxError):\n+            source.getstatementrange(0)\n \n \n def test_getstartingblock_singleline() -> None:\n@@ -380,7 +381,8 @@ def test_code_of_object_instance_with_call() -> None:\n     class A:\n         pass\n \n-    pytest.raises(TypeError, lambda: Source(A()))\n+    with pytest.raises(TypeError):\n+        Source(A())\n \n     class WithCall:\n         def __call__(self) -> None:\n@@ -393,7 +395,8 @@ class Hello:\n         def __call__(self) -> None:\n             pass\n \n-    pytest.raises(TypeError, lambda: Code.from_function(Hello))\n+    with pytest.raises(TypeError):\n+        Code.from_function(Hello)\n \n \n def getstatement(lineno: int, source) -> Source:"
+    },
+    {
+      "sha": "2aa3aae7b1a48224056455677213baccc974b101",
+      "filename": "testing/python/collect.py",
+      "status": "modified",
+      "additions": 8,
+      "deletions": 4,
+      "changes": 12,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Fpython%2Fcollect.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Fpython%2Fcollect.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Fpython%2Fcollect.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -20,7 +20,8 @@\n class TestModule:\n     def test_failing_import(self, pytester: Pytester) -> None:\n         modcol = pytester.getmodulecol(\"import alksdjalskdjalkjals\")\n-        pytest.raises(Collector.CollectError, modcol.collect)\n+        with pytest.raises(Collector.CollectError):\n+            modcol.collect()\n \n     def test_import_duplicate(self, pytester: Pytester) -> None:\n         a = pytester.mkdir(\"a\")\n@@ -72,12 +73,15 @@ def test():\n \n     def test_syntax_error_in_module(self, pytester: Pytester) -> None:\n         modcol = pytester.getmodulecol(\"this is a syntax error\")\n-        pytest.raises(modcol.CollectError, modcol.collect)\n-        pytest.raises(modcol.CollectError, modcol.collect)\n+        with pytest.raises(modcol.CollectError):\n+            modcol.collect()\n+        with pytest.raises(modcol.CollectError):\n+            modcol.collect()\n \n     def test_module_considers_pluginmanager_at_import(self, pytester: Pytester) -> None:\n         modcol = pytester.getmodulecol(\"pytest_plugins='xasdlkj',\")\n-        pytest.raises(ImportError, lambda: modcol.obj)\n+        with pytest.raises(ImportError):\n+            modcol.obj()\n \n     def test_invalid_test_module_name(self, pytester: Pytester) -> None:\n         a = pytester.mkdir(\"a\")"
+    },
+    {
+      "sha": "a0f2981e1baf9c9c93504db955e9540d35815228",
+      "filename": "testing/python/fixtures.py",
+      "status": "modified",
+      "additions": 4,
+      "deletions": 4,
+      "changes": 8,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Fpython%2Ffixtures.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Fpython%2Ffixtures.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Fpython%2Ffixtures.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -3591,8 +3591,8 @@ def myscoped(request):\n                 for x in {ok.split()}:\n                     assert hasattr(request, x)\n                 for x in {error.split()}:\n-                    pytest.raises(AttributeError, lambda:\n-                        getattr(request, x))\n+                    with pytest.raises(AttributeError):\n+                        getattr(request, x)\n                 assert request.session\n                 assert request.config\n             def test_func():\n@@ -3611,8 +3611,8 @@ def arg(request):\n                 for x in {ok.split()!r}:\n                     assert hasattr(request, x)\n                 for x in {error.split()!r}:\n-                    pytest.raises(AttributeError, lambda:\n-                        getattr(request, x))\n+                    with pytest.raises(AttributeError):\n+                        getattr(request, x)\n                 assert request.session\n                 assert request.config\n             def test_func(arg):"
+    },
+    {
+      "sha": "5ba0c0e1c89a5f25e2863e5c9a57b401a6fdfb6f",
+      "filename": "testing/python/raises.py",
+      "status": "modified",
+      "additions": 13,
+      "deletions": 8,
+      "changes": 21,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Fpython%2Fraises.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Fpython%2Fraises.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Fpython%2Fraises.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -21,11 +21,13 @@ def test_check_callable(self) -> None:\n             pytest.raises(RuntimeError, \"int('qwe')\")  # type: ignore[call-overload]\n \n     def test_raises(self):\n-        excinfo = pytest.raises(ValueError, int, \"qwe\")\n+        with pytest.raises(ValueError) as excinfo:\n+            int(\"qwe\")\n         assert \"invalid literal\" in str(excinfo.value)\n \n     def test_raises_function(self):\n-        excinfo = pytest.raises(ValueError, int, \"hello\")\n+        with pytest.raises(ValueError) as excinfo:\n+            int(\"hello\")\n         assert \"invalid literal\" in str(excinfo.value)\n \n     def test_raises_does_not_allow_none(self):\n@@ -179,7 +181,8 @@ def test_invalid_regex():\n \n     def test_noclass(self) -> None:\n         with pytest.raises(TypeError):\n-            pytest.raises(\"wrong\", lambda: None)  # type: ignore[call-overload]\n+            with pytest.raises(\"wrong\"):  # type: ignore[call-overload]\n+                ...  # pragma: no cover\n \n     def test_invalid_arguments_to_raises(self) -> None:\n         with pytest.raises(TypeError, match=\"unknown\"):\n@@ -192,7 +195,8 @@ def test_tuple(self):\n \n     def test_no_raise_message(self) -> None:\n         try:\n-            pytest.raises(ValueError, int, \"0\")\n+            with pytest.raises(ValueError):\n+                int(\"0\")\n         except pytest.fail.Exception as e:\n             assert e.msg == f\"DID NOT RAISE {ValueError!r}\"\n         else:\n@@ -266,7 +270,7 @@ def test_raises_match(self) -> None:\n             pytest.raises(ValueError, int, \"asdf\").match(msg)\n         assert str(excinfo.value) == expr\n \n-        pytest.raises(TypeError, int, match=\"invalid\")\n+        pytest.raises(TypeError, int, match=\"invalid\")  # type: ignore[call-overload]\n \n         def tfunc(match):\n             raise ValueError(f\"match={match}\")\n@@ -323,10 +327,10 @@ def test_raises_match_wrong_type(self):\n     def test_raises_exception_looks_iterable(self):\n         class Meta(type):\n             def __getitem__(self, item):\n-                return 1 / 0\n+                return 1 / 0  # pragma: no cover\n \n             def __len__(self):\n-                return 1\n+                return 1  # pragma: no cover\n \n         class ClassLooksIterableException(Exception, metaclass=Meta):\n             pass\n@@ -335,7 +339,8 @@ class ClassLooksIterableException(Exception, metaclass=Meta):\n             Failed,\n             match=r\"DID NOT RAISE <class 'raises(\\..*)*ClassLooksIterableException'>\",\n         ):\n-            pytest.raises(ClassLooksIterableException, lambda: None)\n+            with pytest.raises(ClassLooksIterableException):\n+                ...  # pragma: no cover\n \n     def test_raises_with_raising_dunder_class(self) -> None:\n         \"\"\"Test current behavior with regard to exceptions via __class__ (#4284).\"\"\""
+    },
+    {
+      "sha": "7ac3f38ab644d7b09977a23e48362d6587f33eab",
+      "filename": "testing/test_cacheprovider.py",
+      "status": "modified",
+      "additions": 4,
+      "deletions": 2,
+      "changes": 6,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_cacheprovider.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_cacheprovider.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_cacheprovider.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -51,7 +51,8 @@ def test_config_cache_dataerror(self, pytester: Pytester) -> None:\n         config = pytester.parseconfigure()\n         assert config.cache is not None\n         cache = config.cache\n-        pytest.raises(TypeError, lambda: cache.set(\"key/name\", cache))\n+        with pytest.raises(TypeError):\n+            cache.set(\"key/name\", cache)\n         config.cache.set(\"key/name\", 0)\n         config.cache._getvaluepath(\"key/name\").write_bytes(b\"123invalid\")\n         val = config.cache.get(\"key/name\", -2)\n@@ -143,7 +144,8 @@ def test_cachefuncarg(cache):\n                 val = cache.get(\"some/thing\", None)\n                 assert val is None\n                 cache.set(\"some/thing\", [1])\n-                pytest.raises(TypeError, lambda: cache.get(\"some/thing\"))\n+                with pytest.raises(TypeError):\n+                    cache.get(\"some/thing\")\n                 val = cache.get(\"some/thing\", [])\n                 assert val == [1]\n         \"\"\""
+    },
+    {
+      "sha": "7aaba99fe433c9808b63fe232eb5753228cd4a36",
+      "filename": "testing/test_capture.py",
+      "status": "modified",
+      "additions": 38,
+      "deletions": 21,
+      "changes": 59,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_capture.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_capture.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_capture.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -96,7 +96,8 @@ def test_init_capturing(self):\n         try:\n             capman = CaptureManager(\"fd\")\n             capman.start_global_capturing()\n-            pytest.raises(AssertionError, capman.start_global_capturing)\n+            with pytest.raises(AssertionError):\n+                capman.start_global_capturing()\n             capman.stop_global_capturing()\n         finally:\n             capouter.stop_capturing()\n@@ -885,7 +886,8 @@ def test_text(self) -> None:\n     def test_unicode_and_str_mixture(self) -> None:\n         f = capture.CaptureIO()\n         f.write(\"\\u00f6\")\n-        pytest.raises(TypeError, f.write, b\"hello\")\n+        with pytest.raises(TypeError):\n+            f.write(b\"hello\")  # type: ignore[arg-type]\n \n     def test_write_bytes_to_buffer(self) -> None:\n         \"\"\"In python3, stdout / stderr are text io wrappers (exposing a buffer\n@@ -912,7 +914,8 @@ def test_unicode_and_str_mixture(self) -> None:\n         sio = io.StringIO()\n         f = capture.TeeCaptureIO(sio)\n         f.write(\"\\u00f6\")\n-        pytest.raises(TypeError, f.write, b\"hello\")\n+        with pytest.raises(TypeError):\n+            f.write(b\"hello\")  # type: ignore[arg-type]\n \n \n def test_dontreadfrominput() -> None:\n@@ -921,19 +924,29 @@ def test_dontreadfrominput() -> None:\n     f = DontReadFromInput()\n     assert f.buffer is f  # type: ignore[comparison-overlap]\n     assert not f.isatty()  # type: ignore[unreachable]\n-    pytest.raises(OSError, f.read)\n-    pytest.raises(OSError, f.readlines)\n+    with pytest.raises(OSError):\n+        f.read()\n+    with pytest.raises(OSError):\n+        f.readlines()\n     iter_f = iter(f)\n-    pytest.raises(OSError, next, iter_f)\n-    pytest.raises(UnsupportedOperation, f.fileno)\n-    pytest.raises(UnsupportedOperation, f.flush)\n+    with pytest.raises(OSError):\n+        next(iter_f)\n+    with pytest.raises(UnsupportedOperation):\n+        f.fileno()\n+    with pytest.raises(UnsupportedOperation):\n+        f.flush()\n     assert not f.readable()\n-    pytest.raises(UnsupportedOperation, f.seek, 0)\n+    with pytest.raises(UnsupportedOperation):\n+        f.seek(0)\n     assert not f.seekable()\n-    pytest.raises(UnsupportedOperation, f.tell)\n-    pytest.raises(UnsupportedOperation, f.truncate, 0)\n-    pytest.raises(UnsupportedOperation, f.write, b\"\")\n-    pytest.raises(UnsupportedOperation, f.writelines, [])\n+    with pytest.raises(UnsupportedOperation):\n+        f.tell()\n+    with pytest.raises(UnsupportedOperation):\n+        f.truncate(0)\n+    with pytest.raises(UnsupportedOperation):\n+        f.write(b\"\")\n+    with pytest.raises(UnsupportedOperation):\n+        f.writelines([])\n     assert not f.writable()\n     assert isinstance(f.encoding, str)\n     f.close()  # just for completeness\n@@ -1005,7 +1018,8 @@ def test_simple(self, tmpfile: BinaryIO) -> None:\n         cap = capture.FDCapture(fd)\n         data = b\"hello\"\n         os.write(fd, data)\n-        pytest.raises(AssertionError, cap.snap)\n+        with pytest.raises(AssertionError):\n+            cap.snap()\n         cap.done()\n         cap = capture.FDCapture(fd)\n         cap.start()\n@@ -1027,7 +1041,8 @@ def test_simple_fail_second_start(self, tmpfile: BinaryIO) -> None:\n         fd = tmpfile.fileno()\n         cap = capture.FDCapture(fd)\n         cap.done()\n-        pytest.raises(AssertionError, cap.start)\n+        with pytest.raises(AssertionError):\n+            cap.start()\n \n     def test_stderr(self) -> None:\n         cap = capture.FDCapture(2)\n@@ -1078,7 +1093,8 @@ def test_simple_resume_suspend(self) -> None:\n             assert s == \"but now yes\\n\"\n             cap.suspend()\n             cap.done()\n-            pytest.raises(AssertionError, cap.suspend)\n+            with pytest.raises(AssertionError):\n+                cap.suspend()\n \n             assert repr(cap) == (\n                 f\"<FDCapture 1 oldfd={cap.targetfd_save} _state='done' tmpfile={cap.tmpfile!r}>\"\n@@ -1160,7 +1176,8 @@ def test_reset_twice_error(self) -> None:\n         with self.getcapture() as cap:\n             print(\"hello\")\n             out, err = cap.readouterr()\n-        pytest.raises(ValueError, cap.stop_capturing)\n+        with pytest.raises(ValueError):\n+            cap.stop_capturing()\n         assert out == \"hello\\n\"\n         assert not err\n \n@@ -1218,7 +1235,8 @@ def test_stdin_nulled_by_default(self) -> None:\n         print(\"XXX which indicates an error in the underlying capturing\")\n         print(\"XXX mechanisms\")\n         with self.getcapture():\n-            pytest.raises(OSError, sys.stdin.read)\n+            with pytest.raises(OSError):\n+                sys.stdin.read()\n \n \n class TestTeeStdCapture(TestStdCapture):\n@@ -1672,9 +1690,8 @@ def test_encodedfile_writelines(tmpfile: BinaryIO) -> None:\n \n def test__get_multicapture() -> None:\n     assert isinstance(_get_multicapture(\"no\"), MultiCapture)\n-    pytest.raises(ValueError, _get_multicapture, \"unknown\").match(\n-        r\"^unknown capturing method: 'unknown'\"\n-    )\n+    with pytest.raises(ValueError, match=r\"^unknown capturing method: 'unknown'$\"):\n+        _get_multicapture(\"unknown\")  # type: ignore[arg-type]\n \n \n def test_logging_while_collecting(pytester: Pytester) -> None:"
+    },
+    {
+      "sha": "296461c12fc19752993f53a728a656dc9838c546",
+      "filename": "testing/test_config.py",
+      "status": "modified",
+      "additions": 10,
+      "deletions": 5,
+      "changes": 15,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_config.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_config.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_config.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -692,7 +692,8 @@ def test_args_source_testpaths(self, pytester: Pytester):\n class TestConfigCmdlineParsing:\n     def test_parsing_again_fails(self, pytester: Pytester) -> None:\n         config = pytester.parseconfig()\n-        pytest.raises(AssertionError, lambda: config.parse([]))\n+        with pytest.raises(AssertionError):\n+            config.parse([])\n \n     def test_explicitly_specified_config_file_is_loaded(\n         self, pytester: Pytester\n@@ -777,7 +778,8 @@ def pytest_addoption(parser):\n         config = pytester.parseconfig(\"--hello=this\")\n         for x in (\"hello\", \"--hello\", \"-X\"):\n             assert config.getoption(x) == \"this\"\n-        pytest.raises(ValueError, config.getoption, \"qweqwe\")\n+        with pytest.raises(ValueError):\n+            config.getoption(\"qweqwe\")\n \n         config_novalue = pytester.parseconfig()\n         assert config_novalue.getoption(\"hello\") is None\n@@ -803,7 +805,8 @@ def pytest_addoption(parser):\n \n     def test_config_getvalueorskip(self, pytester: Pytester) -> None:\n         config = pytester.parseconfig()\n-        pytest.raises(pytest.skip.Exception, config.getvalueorskip, \"hello\")\n+        with pytest.raises(pytest.skip.Exception):\n+            config.getvalueorskip(\"hello\")\n         verbose = config.getvalueorskip(\"verbose\")\n         assert verbose == config.option.verbose\n \n@@ -851,7 +854,8 @@ def pytest_addoption(parser):\n         config = pytester.parseconfig()\n         val = config.getini(\"myname\")\n         assert val == \"hello\"\n-        pytest.raises(ValueError, config.getini, \"other\")\n+        with pytest.raises(ValueError):\n+            config.getini(\"other\")\n \n     @pytest.mark.parametrize(\"config_type\", [\"ini\", \"pyproject\"])\n     def test_addini_paths(self, pytester: Pytester, config_type: str) -> None:\n@@ -881,7 +885,8 @@ def pytest_addoption(parser):\n         assert len(values) == 2\n         assert values[0] == inipath.parent.joinpath(\"hello\")\n         assert values[1] == inipath.parent.joinpath(\"world/sub.py\")\n-        pytest.raises(ValueError, config.getini, \"other\")\n+        with pytest.raises(ValueError):\n+            config.getini(\"other\")\n \n     def make_conftest_for_args(self, pytester: Pytester) -> None:\n         pytester.makeconftest("
+    },
+    {
+      "sha": "950386a4923a42c34579cd95c15cb52f6456e3fe",
+      "filename": "testing/test_debugging.py",
+      "status": "modified",
+      "additions": 3,
+      "deletions": 2,
+      "changes": 5,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_debugging.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_debugging.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_debugging.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -324,12 +324,13 @@ def test_pdb_interaction_exception(self, pytester: Pytester) -> None:\n             def globalfunc():\n                 pass\n             def test_1():\n-                pytest.raises(ValueError, globalfunc)\n+                with pytest.raises(ValueError):\n+                    globalfunc()\n         \"\"\"\n         )\n         child = pytester.spawn_pytest(f\"--pdb {p1}\")\n         child.expect(\".*def test_1\")\n-        child.expect(\".*pytest.raises.*globalfunc\")\n+        child.expect(r\"with pytest.raises\\(ValueError\\)\")\n         child.expect(\"Pdb\")\n         child.sendline(\"globalfunc\")\n         child.expect(\".*function\")"
+    },
+    {
+      "sha": "3e71e6b190cbeae84b0a7dd2a0fbf50abcaca9ba",
+      "filename": "testing/test_legacypath.py",
+      "status": "modified",
+      "additions": 2,
+      "deletions": 1,
+      "changes": 3,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_legacypath.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_legacypath.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_legacypath.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -141,7 +141,8 @@ def pytest_addoption(parser):\n     assert len(values) == 2\n     assert values[0] == inipath.parent.joinpath(\"hello\")\n     assert values[1] == inipath.parent.joinpath(\"world/sub.py\")\n-    pytest.raises(ValueError, config.getini, \"other\")\n+    with pytest.raises(ValueError):\n+        config.getini(\"other\")\n \n \n def test_override_ini_paths(pytester: pytest.Pytester) -> None:"
+    },
+    {
+      "sha": "7ae82fefd3c61f52eebe60080b58e7c975c3a3cf",
+      "filename": "testing/test_mark.py",
+      "status": "modified",
+      "additions": 2,
+      "deletions": 2,
+      "changes": 4,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_mark.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_mark.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_mark.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -735,8 +735,8 @@ def pytest_collection_modifyitems(session):\n                 session.add_marker(\"mark1\")\n                 session.add_marker(pytest.mark.mark2)\n                 session.add_marker(pytest.mark.mark3)\n-                pytest.raises(ValueError, lambda:\n-                        session.add_marker(10))\n+                with pytest.raises(ValueError):\n+                    session.add_marker(10)\n         \"\"\"\n         )\n         pytester.makepyfile("
+    },
+    {
+      "sha": "988790268d20aba4c4752bb470426b33a6cf16c4",
+      "filename": "testing/test_monkeypatch.py",
+      "status": "modified",
+      "additions": 8,
+      "deletions": 4,
+      "changes": 12,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_monkeypatch.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_monkeypatch.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_monkeypatch.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -28,7 +28,8 @@ class A:\n         x = 1\n \n     monkeypatch = MonkeyPatch()\n-    pytest.raises(AttributeError, monkeypatch.setattr, A, \"notexists\", 2)\n+    with pytest.raises(AttributeError):\n+        monkeypatch.setattr(A, \"notexists\", 2)\n     monkeypatch.setattr(A, \"y\", 2, raising=False)\n     assert A.y == 2  # type: ignore\n     monkeypatch.undo()\n@@ -109,7 +110,8 @@ class A:\n \n     monkeypatch = MonkeyPatch()\n     monkeypatch.delattr(A, \"x\")\n-    pytest.raises(AttributeError, monkeypatch.delattr, A, \"y\")\n+    with pytest.raises(AttributeError):\n+        monkeypatch.delattr(A, \"y\")\n     monkeypatch.delattr(A, \"y\", raising=False)\n     monkeypatch.setattr(A, \"x\", 5, raising=False)\n     assert A.x == 5\n@@ -166,7 +168,8 @@ def test_delitem() -> None:\n     monkeypatch.delitem(d, \"x\")\n     assert \"x\" not in d\n     monkeypatch.delitem(d, \"y\", raising=False)\n-    pytest.raises(KeyError, monkeypatch.delitem, d, \"y\")\n+    with pytest.raises(KeyError):\n+        monkeypatch.delitem(d, \"y\")\n     assert not d\n     monkeypatch.setitem(d, \"y\", 1700)\n     assert d[\"y\"] == 1700\n@@ -192,7 +195,8 @@ def test_delenv() -> None:\n     name = \"xyz1234\"\n     assert name not in os.environ\n     monkeypatch = MonkeyPatch()\n-    pytest.raises(KeyError, monkeypatch.delenv, name, raising=True)\n+    with pytest.raises(KeyError):\n+        monkeypatch.delenv(name, raising=True)\n     monkeypatch.delenv(name, raising=False)\n     monkeypatch.undo()\n     os.environ[name] = \"1\""
+    },
+    {
+      "sha": "f56deed8b5d31018c03be387fd925c99809182d1",
+      "filename": "testing/test_parseopt.py",
+      "status": "modified",
+      "additions": 2,
+      "deletions": 1,
+      "changes": 3,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_parseopt.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_parseopt.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_parseopt.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -24,7 +24,8 @@ def parser() -> parseopt.Parser:\n class TestParser:\n     def test_no_help_by_default(self) -> None:\n         parser = parseopt.Parser(usage=\"xyz\", _ispytest=True)\n-        pytest.raises(UsageError, lambda: parser.parse([\"-h\"]))\n+        with pytest.raises(UsageError):\n+            parser.parse([\"-h\"])\n \n     def test_custom_prog(self, parser: parseopt.Parser) -> None:\n         \"\"\"Custom prog can be set for `argparse.ArgumentParser`.\"\"\""
+    },
+    {
+      "sha": "385d907d48126e65fe09e83af47ba18ebdd163f1",
+      "filename": "testing/test_pluginmanager.py",
+      "status": "modified",
+      "additions": 14,
+      "deletions": 9,
+      "changes": 23,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_pluginmanager.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_pluginmanager.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_pluginmanager.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -268,8 +268,10 @@ def test_register_imported_modules(self) -> None:\n         assert pm.is_registered(mod)\n         values = pm.get_plugins()\n         assert mod in values\n-        pytest.raises(ValueError, pm.register, mod)\n-        pytest.raises(ValueError, lambda: pm.register(mod))\n+        with pytest.raises(ValueError):\n+            pm.register(mod)\n+        with pytest.raises(ValueError):\n+            pm.register(mod)\n         # assert not pm.is_registered(mod2)\n         assert pm.get_plugins() == values\n \n@@ -376,8 +378,10 @@ def test_hello(pytestconfig):\n     def test_import_plugin_importname(\n         self, pytester: Pytester, pytestpm: PytestPluginManager\n     ) -> None:\n-        pytest.raises(ImportError, pytestpm.import_plugin, \"qweqwex.y\")\n-        pytest.raises(ImportError, pytestpm.import_plugin, \"pytest_qweqwx.y\")\n+        with pytest.raises(ImportError):\n+            pytestpm.import_plugin(\"qweqwex.y\")\n+        with pytest.raises(ImportError):\n+            pytestpm.import_plugin(\"pytest_qweqwx.y\")\n \n         pytester.syspathinsert()\n         pluginname = \"pytest_hello\"\n@@ -396,8 +400,10 @@ def test_import_plugin_importname(\n     def test_import_plugin_dotted_name(\n         self, pytester: Pytester, pytestpm: PytestPluginManager\n     ) -> None:\n-        pytest.raises(ImportError, pytestpm.import_plugin, \"qweqwex.y\")\n-        pytest.raises(ImportError, pytestpm.import_plugin, \"pytest_qweqwex.y\")\n+        with pytest.raises(ImportError):\n+            pytestpm.import_plugin(\"qweqwex.y\")\n+        with pytest.raises(ImportError):\n+            pytestpm.import_plugin(\"pytest_qweqwex.y\")\n \n         pytester.syspathinsert()\n         pytester.mkpydir(\"pkg\").joinpath(\"plug.py\").write_text(\"x=3\", encoding=\"utf-8\")\n@@ -423,9 +429,8 @@ def test_consider_conftest_deps(\n \n class TestPytestPluginManagerBootstrapping:\n     def test_preparse_args(self, pytestpm: PytestPluginManager) -> None:\n-        pytest.raises(\n-            ImportError, lambda: pytestpm.consider_preparse([\"xyz\", \"-p\", \"hello123\"])\n-        )\n+        with pytest.raises(ImportError):\n+            pytestpm.consider_preparse([\"xyz\", \"-p\", \"hello123\"])\n \n         # Handles -p without space (#3532).\n         with pytest.raises(ImportError) as excinfo:"
+    },
+    {
+      "sha": "f641e9ee8bb83d4f67f8e4c3ed2cda923edf8519",
+      "filename": "testing/test_pytester.py",
+      "status": "modified",
+      "additions": 4,
+      "deletions": 2,
+      "changes": 6,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_pytester.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_pytester.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_pytester.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -71,7 +71,8 @@ class rep2:\n     recorder.unregister()  # type: ignore[attr-defined]\n     recorder.clear()\n     recorder.hook.pytest_runtest_logreport(report=rep3)  # type: ignore[attr-defined]\n-    pytest.raises(ValueError, recorder.getfailures)\n+    with pytest.raises(ValueError):\n+        recorder.getfailures()\n \n \n def test_parseconfig(pytester: Pytester) -> None:\n@@ -196,7 +197,8 @@ def test_hookrecorder_basic(holder) -> None:\n     call = rec.popcall(\"pytest_xyz\")\n     assert call.arg == 123\n     assert call._name == \"pytest_xyz\"\n-    pytest.raises(pytest.fail.Exception, rec.popcall, \"abc\")\n+    with pytest.raises(pytest.fail.Exception):\n+        rec.popcall(\"abc\")\n     pm.hook.pytest_xyz_noarg()\n     call = rec.popcall(\"pytest_xyz_noarg\")\n     assert call._name == \"pytest_xyz_noarg\""
+    },
+    {
+      "sha": "f05fc6e4871ea9af4e546d915be16ccf1bc311e4",
+      "filename": "testing/test_recwarn.py",
+      "status": "modified",
+      "additions": 27,
+      "deletions": 24,
+      "changes": 51,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_recwarn.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_recwarn.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_recwarn.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -97,7 +97,8 @@ def test_recording(self) -> None:\n             rec.clear()\n             assert len(rec.list) == 0\n             assert values is rec.list\n-            pytest.raises(AssertionError, rec.pop)\n+            with pytest.raises(AssertionError):\n+                rec.pop()\n \n     def test_warn_stacklevel(self) -> None:\n         \"\"\"#4243\"\"\"\n@@ -145,10 +146,12 @@ def dep_explicit(self, i: int) -> None:\n \n     def test_deprecated_call_raises(self) -> None:\n         with pytest.raises(pytest.fail.Exception, match=\"No warnings of type\"):\n-            pytest.deprecated_call(self.dep, 3, 5)\n+            with pytest.deprecated_call():\n+                self.dep(3, 5)\n \n     def test_deprecated_call(self) -> None:\n-        pytest.deprecated_call(self.dep, 0, 5)\n+        with pytest.deprecated_call():\n+            self.dep(0, 5)\n \n     def test_deprecated_call_ret(self) -> None:\n         ret = pytest.deprecated_call(self.dep, 0)\n@@ -170,11 +173,14 @@ def test_deprecated_call_preserves(self) -> None:\n \n     def test_deprecated_explicit_call_raises(self) -> None:\n         with pytest.raises(pytest.fail.Exception):\n-            pytest.deprecated_call(self.dep_explicit, 3)\n+            with pytest.deprecated_call():\n+                self.dep_explicit(3)\n \n     def test_deprecated_explicit_call(self) -> None:\n-        pytest.deprecated_call(self.dep_explicit, 0)\n-        pytest.deprecated_call(self.dep_explicit, 0)\n+        with pytest.deprecated_call():\n+            self.dep_explicit(0)\n+        with pytest.deprecated_call():\n+            self.dep_explicit(0)\n \n     @pytest.mark.parametrize(\"mode\", [\"context_manager\", \"call\"])\n     def test_deprecated_call_no_warning(self, mode) -> None:\n@@ -198,7 +204,7 @@ def f():\n     )\n     @pytest.mark.parametrize(\"mode\", [\"context_manager\", \"call\"])\n     @pytest.mark.parametrize(\"call_f_first\", [True, False])\n-    @pytest.mark.filterwarnings(\"ignore\")\n+    @pytest.mark.filterwarnings(\"ignore:hi\")\n     def test_deprecated_call_modes(self, warning_type, mode, call_f_first) -> None:\n         \"\"\"Ensure deprecated_call() captures a deprecation warning as expected inside its\n         block/function.\n@@ -258,32 +264,29 @@ def test_check_callable(self) -> None:\n \n     def test_several_messages(self) -> None:\n         # different messages, b/c Python suppresses multiple identical warnings\n-        pytest.warns(RuntimeWarning, lambda: warnings.warn(\"w1\", RuntimeWarning))\n+        with pytest.warns(RuntimeWarning):\n+            warnings.warn(\"w1\", RuntimeWarning)\n         with pytest.warns(RuntimeWarning):\n             with pytest.raises(pytest.fail.Exception):\n-                pytest.warns(UserWarning, lambda: warnings.warn(\"w2\", RuntimeWarning))\n-        pytest.warns(RuntimeWarning, lambda: warnings.warn(\"w3\", RuntimeWarning))\n+                with pytest.warns(UserWarning):\n+                    warnings.warn(\"w2\", RuntimeWarning)\n+        with pytest.warns(RuntimeWarning):\n+            warnings.warn(\"w3\", RuntimeWarning)\n \n     def test_function(self) -> None:\n         pytest.warns(\n             SyntaxWarning, lambda msg: warnings.warn(msg, SyntaxWarning), \"syntax\"\n         )\n \n     def test_warning_tuple(self) -> None:\n-        pytest.warns(\n-            (RuntimeWarning, SyntaxWarning), lambda: warnings.warn(\"w1\", RuntimeWarning)\n-        )\n-        pytest.warns(\n-            (RuntimeWarning, SyntaxWarning), lambda: warnings.warn(\"w2\", SyntaxWarning)\n-        )\n-        with pytest.warns():\n-            pytest.raises(\n-                pytest.fail.Exception,\n-                lambda: pytest.warns(\n-                    (RuntimeWarning, SyntaxWarning),\n-                    lambda: warnings.warn(\"w3\", UserWarning),\n-                ),\n-            )\n+        with pytest.warns((RuntimeWarning, SyntaxWarning)):\n+            warnings.warn(\"w1\", RuntimeWarning)\n+        with pytest.warns((RuntimeWarning, SyntaxWarning)):\n+            warnings.warn(\"w2\", SyntaxWarning)\n+        with pytest.warns(UserWarning, match=\"^w3$\"):\n+            with pytest.raises(pytest.fail.Exception):\n+                with pytest.warns((RuntimeWarning, SyntaxWarning)):\n+                    warnings.warn(\"w3\", UserWarning)\n \n     def test_as_contextmanager(self) -> None:\n         with pytest.warns(RuntimeWarning):"
+    },
+    {
+      "sha": "3cb3c3a384107b318e945a4105d4975c60f1c5ec",
+      "filename": "testing/test_runner.py",
+      "status": "modified",
+      "additions": 4,
+      "deletions": 2,
+      "changes": 6,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_runner.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_runner.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_runner.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -779,8 +779,10 @@ def f():\n         # check that importorskip reports the actual call\n         # in this test the test_runner.py file\n         assert path.stem == \"test_runner\"\n-        pytest.raises(SyntaxError, pytest.importorskip, \"x y z\")\n-        pytest.raises(SyntaxError, pytest.importorskip, \"x=y\")\n+        with pytest.raises(SyntaxError):\n+            pytest.importorskip(\"x y z\")\n+        with pytest.raises(SyntaxError):\n+            pytest.importorskip(\"x=y\")\n         mod = types.ModuleType(\"hello123\")\n         mod.__version__ = \"1.3\"  # type: ignore\n         monkeypatch.setitem(sys.modules, \"hello123\", mod)"
+    },
+    {
+      "sha": "be1e66112d768c86fabf6e62ba76b1d7b4f16c16",
+      "filename": "testing/test_session.py",
+      "status": "modified",
+      "additions": 2,
+      "deletions": 1,
+      "changes": 3,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_session.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_session.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_session.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -63,7 +63,8 @@ def test_raises_output(self, pytester: Pytester) -> None:\n             \"\"\"\n             import pytest\n             def test_raises_doesnt():\n-                pytest.raises(ValueError, int, \"3\")\n+                with pytest.raises(ValueError):\n+                    int(\"3\")\n         \"\"\"\n         )\n         _passed, _skipped, failed = reprec.listoutcomes()"
+    },
+    {
+      "sha": "5bb641aed3c0b21ad411f831a1dbe9bbaffe9227",
+      "filename": "testing/test_skipping.py",
+      "status": "modified",
+      "additions": 2,
+      "deletions": 1,
+      "changes": 3,
+      "blob_url": "https://github.com/pytest-dev/pytest/blob/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_skipping.py",
+      "raw_url": "https://github.com/pytest-dev/pytest/raw/f7f0889be2be5f63557a8c564ab7d94b3a8636c0/testing%2Ftest_skipping.py",
+      "contents_url": "https://api.github.com/repos/pytest-dev/pytest/contents/testing%2Ftest_skipping.py?ref=f7f0889be2be5f63557a8c564ab7d94b3a8636c0",
+      "patch": "@@ -919,7 +919,8 @@ def test_func():\n                 pass\n         \"\"\"\n         )\n-        pytest.raises(pytest.skip.Exception, lambda: pytest_runtest_setup(item))\n+        with pytest.raises(pytest.skip.Exception):\n+            pytest_runtest_setup(item)\n \n     @pytest.mark.parametrize(\n         \"marker, msg1, msg2\","
+    }
+  ],
+  "ground_truth": [
+    {
+      "path": "doc/en/deprecations.rst",
+      "line": 18,
+      "body": "```suggestion\r\nlegacy callable form of :func:`raises <pytest.raises>`, :func:`warns <pytest.warns>` and :func:`deprecated_call <pytest.deprecated_call>`\r\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n```"
+    },
+    {
+      "path": "src/_pytest/recwarn.py",
+      "line": 89,
+      "body": "Can we flip the conditional here and reduce nesting?"
+    },
+    {
+      "path": "src/_pytest/recwarn.py",
+      "line": 89,
+      "body": "Was thinking for a second that current version would be easier to remove the dead `if` statement when removing the deprecated code, but it's trivial either way so might as well"
+    },
+    {
+      "path": "doc/en/deprecations.rst",
+      "line": 39,
+      "body": "```suggestion\r\n    # Deprecated form, using a callable + arguments:\r\n\r\n    excinfo = pytest.raises(ValueError, int, \"hello\")\r\n    ret1 = pytest.warns(DeprecationWarning, my_warns, \"a\", \"b\", \"c\")\r\n    ret2 = pytest.deprecated_call(my_warns, \"d\", \"e\", \"f\")\r\n\r\n    # The calls above can be upgraded to the context-manager form:\r\n```"
+    },
+    {
+      "path": "doc/en/how-to/assert.rst",
+      "line": 197,
+      "body": "I don't think we should remove this section yet -- the callable form has been deprecated, but not yet removed.\r\n\r\nWe should keep it, just adding a `.. warning::` that it is now considered deprecated and will be removed in a future version."
+    },
+    {
+      "path": "doc/en/deprecations.rst",
+      "line": 17,
+      "body": "```suggestion\r\nLegacy callable form of :func:`raises <pytest.raises>`, :func:`warns <pytest.warns>` and :func:`deprecated_call <pytest.deprecated_call>`\r\n```"
+    },
+    {
+      "path": "src/_pytest/deprecated.py",
+      "line": 40,
+      "body": "Let's add a link to the `deprecations` doc which shows the rationale and examples on how to change the code.\r\n\r\n```suggestion\r\n    \"Use `with pytest.raises(...):` instead.\\n\"\r\n    \"See https://docs.pytest.org/en/stable/reference/deprecations.html#legacy-callable-form-of-raises-warns-and-deprecated-call\"\r\n```\r\n\r\nSame for the messages below."
+    },
+    {
+      "path": "src/_pytest/recwarn.py",
+      "line": 71,
+      "body": "Same comment as before: given we are deprecating but not removing, we should keep the docs for the legacy form, with a warning that it has been deprecated."
+    },
+    {
+      "path": "src/_pytest/recwarn.py",
+      "line": 87,
+      "body": "```suggestion\r\n    # Potential QoL: allow `with deprecated_call:` - i.e. no parens.\r\n```"
+    },
+    {
+      "path": "src/_pytest/deprecated.py",
+      "line": 35,
+      "body": "[`warnings.deprecated`](https://docs.python.org/3/library/warnings.html#warnings.deprecated) will emit a warning at runtime in addition to be used by type checkers, but not for Python <= 3.12, which IIUC is a problem then.\r\n\r\nSeems like the only solution is to always generate the runtime warning ourselves, and only rely on the `deprecated` decorator when `TYPE_CHECKING`?\r\n"
+    },
+    {
+      "path": "src/_pytest/deprecated.py",
+      "line": 35,
+      "body": "hm, since this PR does manually raise the warning everywhere we should be getting double warnings on 3.13 ... and either the tests are not catching it or the second one is getting suppressed."
+    },
+    {
+      "path": "src/_pytest/deprecated.py",
+      "line": 35,
+      "body": "Ah, `@deprecated` is only being used together with `@overload` in this PR; so it is solely used for `TYPE_CHECKING`. I'll clarify that with comments/docstring in case somebody wants to use it more in the future"
+    },
+    {
+      "path": "doc/en/how-to/assert.rst",
+      "line": 286,
+      "body": "```suggestion\r\n   This form is deprecated and will be removed in a future release.\r\n```"
+    },
+    {
+      "path": "src/_pytest/python_api.py",
+      "line": 21,
+      "body": "This is unused"
+    },
+    {
+      "path": "doc/en/how-to/assert.rst",
+      "line": 285,
+      "body": "As discussed, let's remove this warning.\r\n\r\nRemoving the \"Nonetheless\" seems fine.\r\n\r\nI also think we can remove the \"The reporter will provide ...\" paragraph to make the section shorter."
+    },
+    {
+      "path": "src/_pytest/recwarn.py",
+      "line": 84,
+      "body": "Seems weird to me :)"
+    }
+  ]
+}
