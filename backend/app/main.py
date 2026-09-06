@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, timezone
-
+from app.dashboard import router as dashboard_router
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.orm import Session
 from app.review_service import run_review_for_pr
@@ -15,9 +16,14 @@ logging.basicConfig(level=logging.INFO)
 
 
 app = FastAPI(title="PR Sentinel API")
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(webhooks_router)
-
+app.include_router(dashboard_router)
 
 @app.get("/")
 def read_root():
