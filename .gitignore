@@ -12,3 +12,4 @@ frontend/.next/
 # General
 .DS_Store
 *.log
+backend/*.pem
