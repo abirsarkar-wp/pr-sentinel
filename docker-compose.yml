@@ -1,0 +1,16 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: pr-sentinel-db
+    restart: always
+    environment:
+      POSTGRES_USER: prsentinel
+      POSTGRES_PASSWORD: prsentinel_dev_password
+      POSTGRES_DB: prsentinel
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
