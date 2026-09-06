@@ -3,12 +3,20 @@ import hashlib
 import json
 import logging
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Header,
+    HTTPException,
+    Request,
+)
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database import get_db
+from app.database import get_db, SessionLocal
 from app.models import PullRequest, Repo
+from app.review_service import run_review_for_pr
 
 
 logger = logging.getLogger("pr_sentinel.webhooks")
@@ -20,7 +28,6 @@ def verify_signature(
     payload_body: bytes,
     signature_header: str | None,
 ) -> None:
-    """Verify GitHub's HMAC signature."""
     if not signature_header:
         raise HTTPException(
             status_code=401,
@@ -45,32 +52,39 @@ def verify_signature(
 
 def get_or_create_repo(
     db: Session,
-    github_repo_id: int,
-    full_name: str,
-    installation_id: int,
+    payload: dict,
 ) -> Repo:
+    repo_data = payload["repository"]
+    installation_id = payload["installation"]["id"]
+
     repo = (
         db.query(Repo)
-        .filter(Repo.github_repo_id == github_repo_id)
+        .filter(
+            Repo.github_repo_id == repo_data["id"]
+        )
         .first()
     )
 
     if repo is None:
         repo = Repo(
-            github_repo_id=github_repo_id,
-            full_name=full_name,
+            github_repo_id=repo_data["id"],
+            full_name=repo_data["full_name"],
             installation_id=installation_id,
         )
+
         db.add(repo)
-        db.flush()
+        db.commit()
+        db.refresh(repo)
 
         logger.info(
-            f"Created repo record: {full_name}"
+            f"Created new repo record: {repo.full_name}"
         )
 
     else:
-        repo.full_name = full_name
+        repo.full_name = repo_data["full_name"]
         repo.installation_id = installation_id
+        db.commit()
+        db.refresh(repo)
 
     return repo
 
@@ -78,16 +92,16 @@ def get_or_create_repo(
 def upsert_pull_request(
     db: Session,
     repo: Repo,
-    github_pr_number: int,
-    title: str,
-    author: str,
-    status: str,
+    payload: dict,
 ) -> PullRequest:
+    pr_data = payload["pull_request"]
+
     pr = (
         db.query(PullRequest)
         .filter(
             PullRequest.repo_id == repo.id,
-            PullRequest.github_pr_number == github_pr_number,
+            PullRequest.github_pr_number
+            == pr_data["number"],
         )
         .first()
     )
@@ -95,35 +109,87 @@ def upsert_pull_request(
     if pr is None:
         pr = PullRequest(
             repo_id=repo.id,
-            github_pr_number=github_pr_number,
-            title=title,
-            author=author,
-            status=status,
+            github_pr_number=pr_data["number"],
+            title=pr_data["title"],
+            author=pr_data["user"]["login"],
+            status=pr_data["state"],
         )
+
         db.add(pr)
 
         logger.info(
-            f"Created PR record: {repo.full_name}#{github_pr_number}"
+            f"Created new PR record: "
+            f"#{pr.github_pr_number} {pr.title}"
         )
 
     else:
-        pr.title = title
-        pr.author = author
-        pr.status = status
+        pr.title = pr_data["title"]
+        pr.status = pr_data["state"]
 
         logger.info(
-            f"Updated PR record: {repo.full_name}#{github_pr_number}"
+            f"Updated existing PR record: "
+            f"#{pr.github_pr_number}"
         )
 
+    db.commit()
+    db.refresh(pr)
+
     return pr
+
+
+async def _run_review_in_background(
+    pr_id: int,
+):
+    """
+    Run the review using a new database session.
+    The request-scoped session may already be closed
+    when this background task executes.
+    """
+    db = SessionLocal()
+
+    try:
+        pr = (
+            db.query(PullRequest)
+            .filter(PullRequest.id == pr_id)
+            .first()
+        )
+
+        if pr is None:
+            logger.error(
+                f"Background review: PR id={pr_id} not found"
+            )
+            return
+
+        logger.info(
+            f"Starting background review for PR id={pr_id}"
+        )
+
+        await run_review_for_pr(
+            db,
+            pr,
+        )
+
+        logger.info(
+            f"Finished background review for PR id={pr_id}"
+        )
+
+    except Exception as exc:
+        logger.exception(
+            f"Background review failed for "
+            f"PR id={pr_id}: {exc}"
+        )
+
+    finally:
+        db.close()
 
 
 @router.post("/webhooks/github")
 async def github_webhook(
     request: Request,
-    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks,
     x_hub_signature_256: str | None = Header(default=None),
     x_github_event: str | None = Header(default=None),
+    db: Session = Depends(get_db),
 ):
     raw_body = await request.body()
 
@@ -141,56 +207,33 @@ async def github_webhook(
     if x_github_event == "pull_request":
         action = payload.get("action")
 
-        repository = payload.get("repository", {})
-        pull_request = payload.get("pull_request", {})
-        installation = payload.get("installation", {})
-
-        github_repo_id = repository.get("id")
-        repo_full_name = repository.get("full_name")
-        installation_id = installation.get("id")
-
-        pr_number = pull_request.get("number")
-        title = pull_request.get("title", "")
-        author = pull_request.get("user", {}).get("login", "")
-        state = pull_request.get("state", "open")
-
-        logger.info(
-            f"PR event: action={action}, "
-            f"repo={repo_full_name}, "
-            f"pr_number={pr_number}, "
-            f"installation_id={installation_id}"
-        )
-
         if action in (
             "opened",
             "synchronize",
             "reopened",
         ):
             repo = get_or_create_repo(
-                db=db,
-                github_repo_id=github_repo_id,
-                full_name=repo_full_name,
-                installation_id=installation_id,
+                db,
+                payload,
             )
 
-            upsert_pull_request(
-                db=db,
-                repo=repo,
-                github_pr_number=pr_number,
-                title=title,
-                author=author,
-                status=state,
+            pr = upsert_pull_request(
+                db,
+                repo,
+                payload,
             )
-
-            db.commit()
 
             logger.info(
-                "Repository and pull request persisted successfully."
+                f"Persisted repo_id={repo.id}, "
+                f"pr_id={pr.id}, action={action} "
+                f"— queuing review."
             )
 
-            # Part 5 will trigger the actual review job here.
-            logger.info(
-                "This PR would trigger a review job."
+            background_tasks.add_task(
+                _run_review_in_background,
+                pr.id,
             )
 
-    return {"received": True}
+    return {
+        "received": True
+    }

@@ -245,6 +245,7 @@ async def run_agent_review(
             }
         )
 
+        # Always append Claude's response first.
         messages.append(
             {
                 "role": "assistant",
@@ -252,18 +253,7 @@ async def run_agent_review(
             }
         )
 
-        if response.stop_reason != "tool_use":
-            messages.append(
-                {
-                    "role": "user",
-                    "content": (
-                        "Please call submit_findings with your "
-                        "findings when you're ready."
-                    ),
-                }
-            )
-            continue
-
+        # Collect every tool call from this Claude response.
         tool_results = []
         submitted_input = None
 
@@ -299,12 +289,15 @@ async def run_agent_review(
                     }
                 )
 
-        messages.append(
-            {
-                "role": "user",
-                "content": tool_results,
-            }
-        )
+        # If Claude used tools, the tool_result message MUST
+        # immediately follow the assistant tool_use message.
+        if tool_results:
+            messages.append(
+                {
+                    "role": "user",
+                    "content": tool_results,
+                }
+            )
 
         if submitted_input is not None:
             try:
@@ -313,20 +306,38 @@ async def run_agent_review(
                 )
 
             except Exception as exc:
-                # Tell Claude exactly what failed and let it retry.
+                # We already supplied the required tool_result.
+                # Now a separate user message can explain the
+                # validation problem.
                 messages.append(
                     {
                         "role": "user",
                         "content": (
-                            "Your submit_findings call didn't match "
+                            "Your submit_findings call did not match "
                             f"the required schema: {exc}. "
-                            "Please fix and resubmit."
+                            "Please fix it and call submit_findings "
+                            "again."
                         ),
                     }
                 )
                 continue
 
             break
+
+        # If Claude returned ordinary text without using a tool,
+        # explicitly ask it to continue with submit_findings.
+        if not tool_results:
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        "Continue reviewing the PR. Use the available "
+                        "tools when you need more context, and when "
+                        "you are ready, call submit_findings with "
+                        "your complete draft findings."
+                    ),
+                }
+            )
 
     if draft is None:
         raise RuntimeError(
@@ -335,17 +346,22 @@ async def run_agent_review(
         )
 
     # Phase B: self-critique.
-    critique_messages = messages + [
-        {
-            "role": "user",
-            "content": (
-                "Now critique your own draft findings above. "
-                "Remove anything that's a false positive, "
-                "a duplicate, or too minor to raise in a real "
-                "review. Call submit_findings again with your "
-                "final, cleaned-up list."
-            ),
-        }
+    critique_messages = [
+    {
+        "role": "user",
+        "content": (
+            "Review this pull request again using the draft findings "
+            "below.\n\n"
+            f"PR title: {pr_data['title']}\n\n"
+            "Draft findings:\n"
+            f"{draft.model_dump_json(indent=2)}\n\n"
+            "Now critique the draft findings. Remove anything that is "
+            "a false positive, a duplicate, or too minor to raise in a "
+            "real review. Keep only actionable findings grounded in "
+            "the PR diff. Call submit_findings with the final cleaned-up "
+            "list."
+        ),
+    }
     ]
 
     start = time.time()

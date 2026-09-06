@@ -1,8 +1,17 @@
 from sqlalchemy.orm import Session
 
 from app.agent import run_agent_review
-from app.github_api import get_pr, get_pr_files
-from app.models import AgentTrace, Finding, PullRequest, Review
+from app.github_api import (
+    get_pr,
+    get_pr_files,
+    post_review,
+)
+from app.models import (
+    AgentTrace,
+    Finding,
+    PullRequest,
+    Review,
+)
 
 
 async def run_review_for_pr(
@@ -71,6 +80,26 @@ async def run_review_for_pr(
                 tool_calls_json=None,
                 latency_ms=trace.get("latency_ms"),
             )
+        )
+
+    db.commit()
+
+    try:
+        await post_review(
+            repo,
+            pr.github_pr_number,
+            final.summary,
+            final.findings,
+            files,
+        )
+
+        review.status = "posted"
+
+    except Exception as exc:
+        review.status = "post_failed"
+        review.summary = (
+            f"{review.summary}\n\n"
+            f"[Posting to GitHub failed: {exc}]"
         )
 
     db.commit()
