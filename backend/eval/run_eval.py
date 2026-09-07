@@ -7,32 +7,53 @@ from pathlib import Path
 
 import sys
 
-sys.path.append(str(Path(__file__).resolve().parent.parent))
+sys.path.append(
+    str(Path(__file__).resolve().parent.parent)
+)
 
 from app.database import SessionLocal
-from app.models import CodeChunk, EvalRun, Repo
 from app.embeddings import embed_documents
 from app.ingestion import chunk_file, find_code_files
+from app.models import CodeChunk, EvalRun, Repo
 from eval.eval_agent import run_agent_review_local
 from eval.scorer import score
 
 
-GROUND_TRUTH_DIR = Path(__file__).parent / "ground_truth"
-DATASET_PATH = Path(__file__).parent / "dataset.json"
+GROUND_TRUTH_DIR = (
+    Path(__file__).parent / "ground_truth"
+)
 
-MODES = ["full", "no_retrieval", "no_critique"]
+DATASET_PATH = (
+    Path(__file__).parent / "dataset.json"
+)
+
+MODES = [
+    "full",
+    "no_retrieval",
+    "no_critique",
+]
 
 
-def clone_public_repo(repo_full_name: str, head_sha: str) -> Path:
+def clone_public_repo(
+    repo_full_name: str,
+    head_sha: str,
+) -> Path:
     """
-    Create a temporary repository checkout containing exactly the PR head SHA.
-    Only the required commit is fetched.
+    Create a temporary checkout at the exact PR head SHA.
     """
-    tmp_dir = Path(tempfile.mkdtemp(prefix="eval-clone-"))
+    tmp_dir = Path(
+        tempfile.mkdtemp(
+            prefix="eval-clone-"
+        )
+    )
 
     try:
         subprocess.run(
-            ["git", "init", str(tmp_dir)],
+            [
+                "git",
+                "init",
+                str(tmp_dir),
+            ],
             check=True,
             stdout=subprocess.DEVNULL,
         )
@@ -79,20 +100,30 @@ def clone_public_repo(repo_full_name: str, head_sha: str) -> Path:
         return tmp_dir
 
     except Exception:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+        shutil.rmtree(
+            tmp_dir,
+            ignore_errors=True,
+        )
         raise
 
 
-def get_or_create_eval_repo(db, repo_full_name: str) -> Repo:
+def get_or_create_eval_repo(
+    db,
+    repo_full_name: str,
+) -> Repo:
     repo = (
         db.query(Repo)
-        .filter(Repo.full_name == repo_full_name)
+        .filter(
+            Repo.full_name == repo_full_name
+        )
         .first()
     )
 
     if repo is None:
         repo = Repo(
-            github_repo_id=hash(repo_full_name) % (10**9),
+            github_repo_id=hash(
+                repo_full_name
+            ) % (10**9),
             full_name=repo_full_name,
             installation_id=0,
         )
@@ -104,6 +135,28 @@ def get_or_create_eval_repo(db, repo_full_name: str) -> Repo:
     return repo
 
 
+def clear_eval_chunks(
+    db,
+    repo: Repo,
+):
+    """
+    Remove previous evaluation chunks for this repo.
+    """
+    deleted = (
+        db.query(CodeChunk)
+        .filter(
+            CodeChunk.repo_id == repo.id
+        )
+        .delete(
+            synchronize_session=False
+        )
+    )
+
+    db.commit()
+
+    return deleted
+
+
 def ingest_for_eval(
     db,
     repo: Repo,
@@ -111,38 +164,65 @@ def ingest_for_eval(
     file_paths: list[str] | None = None,
 ):
     """
-    Ingest either the whole repository or only selected files.
+    Ingest the selected evaluation corpus.
 
-    For the real evaluation we use the full repository so retrieval
-    can actually find related code outside the PR diff.
+    We intentionally use PR-changed files only because
+    the current Voyage account is restricted to 3 RPM.
     """
-    db.query(CodeChunk).filter(
-        CodeChunk.repo_id == repo.id
-    ).delete()
-
-    db.commit()
+    clear_eval_chunks(
+        db,
+        repo,
+    )
 
     if file_paths:
         files = [
             repo_dir / file_path
             for file_path in file_paths
-            if (repo_dir / file_path).is_file()
+            if (
+                repo_dir / file_path
+            ).is_file()
         ]
     else:
-        files = find_code_files(repo_dir)
+        files = find_code_files(
+            repo_dir
+        )
 
     all_chunks = []
 
     for file_path in files:
         all_chunks.extend(
-            chunk_file(file_path, repo_dir)
+            chunk_file(
+                file_path,
+                repo_dir,
+            )
         )
 
+    MAX_EVAL_CHUNKS = 20
+
+    if len(all_chunks) > MAX_EVAL_CHUNKS:
+        print(
+            f"  Limiting evaluation corpus from "
+            f"{len(all_chunks)} chunks to "
+            f"{MAX_EVAL_CHUNKS} chunks"
+        )
+        all_chunks = all_chunks[:MAX_EVAL_CHUNKS]
+
+    print(
+        f"  Code files: {len(files)}"
+    )
+
+    print(
+        f"  Chunks: {len(all_chunks)}"
+    )
+
     if not all_chunks:
-        return
+        return 0
 
     embeddings = embed_documents(
-        [chunk["content"] for chunk in all_chunks]
+        [
+            chunk["content"]
+            for chunk in all_chunks
+        ]
     )
 
     for chunk, embedding in zip(
@@ -152,23 +232,30 @@ def ingest_for_eval(
         db.add(
             CodeChunk(
                 repo_id=repo.id,
-                file_path=chunk["file_path"],
-                start_line=chunk["start_line"],
-                end_line=chunk["end_line"],
-                content=chunk["content"],
+                file_path=chunk[
+                    "file_path"
+                ],
+                start_line=chunk[
+                    "start_line"
+                ],
+                end_line=chunk[
+                    "end_line"
+                ],
+                content=chunk[
+                    "content"
+                ],
                 embedding=embedding,
             )
         )
 
     db.commit()
 
+    return len(all_chunks)
+
 
 def load_ground_truth_files() -> list[Path]:
     """
-    Load only the PRs explicitly listed in dataset.json.
-
-    This prevents stale JSON files in ground_truth/ from
-    accidentally being included in the evaluation.
+    Load only PRs explicitly listed in dataset.json.
     """
     if not DATASET_PATH.exists():
         raise FileNotFoundError(
@@ -181,7 +268,10 @@ def load_ground_truth_files() -> list[Path]:
         )
     )
 
-    if not isinstance(dataset, list):
+    if not isinstance(
+        dataset,
+        list,
+    ):
         raise ValueError(
             "dataset.json must contain a JSON list."
         )
@@ -189,26 +279,42 @@ def load_ground_truth_files() -> list[Path]:
     gt_files: list[Path] = []
 
     for entry in dataset:
-        if not isinstance(entry, dict):
+        if not isinstance(
+            entry,
+            dict,
+        ):
             raise ValueError(
                 "Each dataset entry must be an object."
             )
 
-        repo = entry.get("repo")
-        pr_number = entry.get("pr_number")
+        repo = entry.get(
+            "repo"
+        )
 
-        if not repo or not isinstance(pr_number, int):
+        pr_number = entry.get(
+            "pr_number"
+        )
+
+        if (
+            not repo
+            or not isinstance(
+                pr_number,
+                int,
+            )
+        ):
             raise ValueError(
                 "Each dataset entry must contain "
                 "'repo' and integer 'pr_number'."
             )
 
         filename = (
-            f"{repo.replace('/', '_')}_{pr_number}.json"
+            f"{repo.replace('/', '_')}"
+            f"_{pr_number}.json"
         )
 
         ground_truth_file = (
-            GROUND_TRUTH_DIR / filename
+            GROUND_TRUTH_DIR
+            / filename
         )
 
         if not ground_truth_file.exists():
@@ -218,9 +324,65 @@ def load_ground_truth_files() -> list[Path]:
             )
             continue
 
-        gt_files.append(ground_truth_file)
+        gt_files.append(
+            ground_truth_file
+        )
 
     return gt_files
+
+
+def evaluate_mode(
+    db,
+    repo_dir: Path,
+    repo: Repo,
+    data: dict,
+    mode: str,
+):
+    """
+    Run one evaluation mode and return:
+    predictions, score, failure.
+    """
+    use_retrieval = (
+        mode != "no_retrieval"
+    )
+
+    use_critique = (
+        mode != "no_critique"
+    )
+
+    try:
+        result = run_agent_review_local(
+            db,
+            repo_dir,
+            repo.id,
+            data,
+            data["files"],
+            use_retrieval=use_retrieval,
+            use_critique=use_critique,
+        )
+
+        predictions = [
+            finding.model_dump()
+            for finding in result.findings
+        ]
+
+        result_score = score(
+            predictions,
+            data["ground_truth"],
+        )
+
+        return (
+            predictions,
+            result_score,
+            None,
+        )
+
+    except Exception as exc:
+        return (
+            [],
+            None,
+            str(exc),
+        )
 
 
 def main():
@@ -232,7 +394,14 @@ def main():
             for mode in MODES
         }
 
-        gt_files = load_ground_truth_files()
+        failures = {
+            mode: []
+            for mode in MODES
+        }
+
+        gt_files = (
+            load_ground_truth_files()
+        )
 
         if not gt_files:
             raise RuntimeError(
@@ -240,7 +409,8 @@ def main():
             )
 
         print(
-            f"Evaluating against {len(gt_files)} PRs "
+            f"Evaluating against "
+            f"{len(gt_files)} PRs "
             f"across modes: {MODES}\n"
         )
 
@@ -252,9 +422,12 @@ def main():
             )
 
             print(
-                f"--- {data['repo']}#{data['pr_number']} "
-                f"({len(data['ground_truth'])} "
-                f"human comments) ---"
+                f"--- "
+                f"{data['repo']}#"
+                f"{data['pr_number']} "
+                f"("
+                f"{len(data['ground_truth'])}"
+                f" human comments) ---"
             )
 
             repo_dir = clone_public_repo(
@@ -263,71 +436,96 @@ def main():
             )
 
             try:
-                repo = get_or_create_eval_repo(
-                    db,
-                    data["repo"],
+                repo = (
+                    get_or_create_eval_repo(
+                        db,
+                        data["repo"],
+                    )
                 )
 
-                # Evaluation corpus:
-                # use only files changed by the PR.
-                #
-                # This keeps the evaluation feasible under the
-                # current Voyage free-tier rate limit.
                 changed_files = [
                     file_data["filename"]
                     for file_data in data["files"]
-                    if file_data.get("filename")
+                    if file_data.get(
+                        "filename"
+                    )
                 ]
 
                 print(
-                    f"  Evaluation corpus: {len(changed_files)} changed files"
+                    f"  Evaluation corpus: "
+                    f"{len(changed_files)} "
+                    f"changed files"
                 )
 
-                ingest_for_eval(
-                    db,
-                    repo,
-                    repo_dir,
-                    changed_files,
+                # Only full and no_critique need
+                # retrieval/embedding.
+                needs_embeddings = any(
+                    mode in {
+                        "full",
+                        "no_critique",
+                    }
+                    for mode in MODES
                 )
+
+                if needs_embeddings:
+                    ingest_for_eval(
+                        db,
+                        repo,
+                        repo_dir,
+                        changed_files,
+                    )
+
+                    print(
+                        "  Ingestion OK"
+                    )
 
                 for mode in MODES:
-                    use_retrieval = (
-                        mode != "no_retrieval"
-                    )
+                    # no_retrieval does not need the
+                    # vector database at all.
+                    if (
+                        mode == "no_retrieval"
+                    ):
+                        clear_eval_chunks(
+                            db,
+                            repo,
+                        )
 
-                    use_critique = (
-                        mode != "no_critique"
-                    )
-
-                    try:
-                        result = run_agent_review_local(
+                    predictions, result_score, failure = (
+                        evaluate_mode(
                             db,
                             repo_dir,
-                            repo.id,
+                            repo,
                             data,
-                            data["files"],
-                            use_retrieval=use_retrieval,
-                            use_critique=use_critique,
+                            mode,
                         )
-
-                        predictions = [
-                            finding.model_dump()
-                            for finding in result.findings
-                        ]
-
-                    except Exception as exc:
-                        print(
-                            f"  [{mode}] FAILED: {exc}"
-                        )
-
-                        predictions = []
-
-                    result_score = score(
-                        predictions,
-                        data["ground_truth"],
                     )
 
-                    all_scores[mode].append(
+                    if failure:
+                        failures[mode].append(
+                            {
+                                "repo": data[
+                                    "repo"
+                                ],
+                                "pr_number": data[
+                                    "pr_number"
+                                ],
+                                "error": failure,
+                            }
+                        )
+
+                        print(
+                            f"  [{mode}] "
+                            f"FAILED: {failure}"
+                        )
+
+                        # Failed runs are NOT
+                        # treated as a real
+                        # zero-score prediction.
+                        continue
+
+                    all_scores[
+                        mode
+                    ].append(
                         result_score
                     )
 
@@ -347,86 +545,174 @@ def main():
                     ignore_errors=True,
                 )
 
-        print("\n=== AGGREGATE RESULTS ===\n")
+        print(
+            "\n=== AGGREGATE RESULTS ===\n"
+        )
 
         report_lines = [
-            "| Mode | Avg Precision | Avg Recall | Avg False-Positive Rate |",
-            "|---|---|---|---|",
+            "| Mode | Avg Precision | Avg Recall | Avg False-Positive Rate | Successful Runs |",
+            "|---|---|---|---|---:|",
         ]
 
         for mode in MODES:
-            scores = all_scores[mode]
+            scores = all_scores[
+                mode
+            ]
 
-            if not scores:
-                continue
-
-            avg_precision = (
-                sum(
-                    item["precision"]
-                    for item in scores
+            if scores:
+                avg_precision = (
+                    sum(
+                        item[
+                            "precision"
+                        ]
+                        for item in scores
+                    )
+                    / len(scores)
                 )
-                / len(scores)
-            )
 
-            avg_recall = (
-                sum(
-                    item["recall"]
-                    for item in scores
+                avg_recall = (
+                    sum(
+                        item[
+                            "recall"
+                        ]
+                        for item in scores
+                    )
+                    / len(scores)
                 )
-                / len(scores)
-            )
 
-            avg_fp = (
-                sum(
-                    item["false_positive_rate"]
-                    for item in scores
+                avg_fp = (
+                    sum(
+                        item[
+                            "false_positive_rate"
+                        ]
+                        for item in scores
+                    )
+                    / len(scores)
                 )
-                / len(scores)
-            )
 
-            print(
-                f"{mode}: "
-                f"precision={avg_precision:.2f} "
-                f"recall={avg_recall:.2f} "
-                f"fp_rate={avg_fp:.2f}"
-            )
-
-            report_lines.append(
-                f"| {mode} | "
-                f"{avg_precision:.2f} | "
-                f"{avg_recall:.2f} | "
-                f"{avg_fp:.2f} |"
-            )
-
-            db.add(
-                EvalRun(
-                    run_at=datetime.now(timezone.utc),
-                    dataset_name="portfolio_eval_v1",
-                    precision=avg_precision,
-                    recall=avg_recall,
-                    false_positive_rate=avg_fp,
-                    notes=f"mode={mode}",
+                print(
+                    f"{mode}: "
+                    f"precision="
+                    f"{avg_precision:.2f} "
+                    f"recall="
+                    f"{avg_recall:.2f} "
+                    f"fp_rate="
+                    f"{avg_fp:.2f}"
                 )
-            )
+
+                report_lines.append(
+                    f"| {mode} | "
+                    f"{avg_precision:.2f} | "
+                    f"{avg_recall:.2f} | "
+                    f"{avg_fp:.2f} | "
+                    f"{len(scores)} |"
+                )
+
+                db.add(
+                    EvalRun(
+                        run_at=(
+                            datetime.now(
+                                timezone.utc
+                            )
+                        ),
+                        dataset_name=(
+                            "portfolio_eval_v1"
+                        ),
+                        precision=(
+                            avg_precision
+                        ),
+                        recall=(
+                            avg_recall
+                        ),
+                        false_positive_rate=(
+                            avg_fp
+                        ),
+                        notes=(
+                            f"mode={mode}; "
+                            "changed-files corpus"
+                        ),
+                    )
+                )
+
+            else:
+                print(
+                    f"{mode}: "
+                    "no successful runs"
+                )
+
+                report_lines.append(
+                    f"| {mode} | "
+                    "N/A | N/A | N/A | 0 |"
+                )
 
         db.commit()
+
+        total_failures = sum(
+            len(items)
+            for items in failures.values()
+        )
 
         results_path = (
             Path(__file__).resolve().parent.parent
             / "EVAL_RESULTS.md"
         )
 
-        results_path.write_text(
+        report = (
             "# PR Sentinel — Evaluation Results\n\n"
-            f"Evaluated against {len(gt_files)} "
-            "real merged PRs with genuine human "
-            "review comments.\n\n"
+            f"Evaluated against "
+            f"{len(gt_files)} real merged PRs "
+            "with genuine human review comments.\n\n"
+            "## Evaluation scope\n\n"
+            "The evaluation corpus uses PR-changed files only. "
+            "This was done to keep the experiment feasible "
+            "under the current Voyage AI free-tier rate limit. "
+            "This is not equivalent to unrestricted "
+            "full-repository retrieval.\n\n"
             + "\n".join(report_lines)
-            + (
-                "\n\n_Full mode = retrieval + "
-                "self-critique. Ablations remove "
-                "one component at a time._\n"
-            ),
+            + "\n\n"
+            "## Run failures\n\n"
+            f"Total failed mode runs: "
+            f"{total_failures}\n\n"
+        )
+
+        for mode in MODES:
+            report += (
+                f"### {mode}\n\n"
+            )
+
+            if not failures[mode]:
+                report += (
+                    "No failed runs.\n\n"
+                )
+                continue
+
+            for failure in failures[
+                mode
+            ]:
+                report += (
+                    f"- "
+                    f"{failure['repo']}#"
+                    f"{failure['pr_number']}: "
+                    f"{failure['error']}\n"
+                )
+
+            report += "\n"
+
+        report += (
+            "## Methodology\n\n"
+            "A prediction matches a human review comment "
+            "when the file path matches and the predicted "
+            "line is within three lines of the human-reviewed "
+            "line. Agent execution failures are reported "
+            "separately and are not silently converted into "
+            "zero-quality predictions.\n\n"
+            "Full mode = retrieval + self-critique.\n"
+            "No retrieval = retrieval disabled.\n"
+            "No critique = self-critique disabled.\n"
+        )
+
+        results_path.write_text(
+            report,
             encoding="utf-8",
         )
 
