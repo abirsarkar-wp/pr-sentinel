@@ -2,7 +2,8 @@ import hmac
 import hashlib
 import json
 import logging
-
+from datetime import datetime, timezone
+from app.ingestion import ingest_repo
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -142,6 +143,8 @@ async def _run_review_in_background(
 ):
     """
     Run the review using a new database session.
+
+    If the repository has never been indexed, ingest it first.
     The request-scoped session may already be closed
     when this background task executes.
     """
@@ -160,6 +163,36 @@ async def _run_review_in_background(
             )
             return
 
+        repo = pr.repo
+
+        # ---------------------------------------------------------
+        # AUTOMATIC FIRST-TIME INDEXING
+        # ---------------------------------------------------------
+        if repo.last_indexed_at is None:
+            logger.info(
+                f"Repo {repo.full_name} never indexed "
+                f"— ingesting before first review."
+            )
+
+            await ingest_repo(
+                db,
+                repo,
+            )
+
+            repo.last_indexed_at = datetime.now(
+                timezone.utc
+            )
+
+            db.commit()
+
+            logger.info(
+                f"Finished initial indexing for "
+                f"{repo.full_name}"
+            )
+
+        # ---------------------------------------------------------
+        # RUN AI REVIEW
+        # ---------------------------------------------------------
         logger.info(
             f"Starting background review for PR id={pr_id}"
         )
