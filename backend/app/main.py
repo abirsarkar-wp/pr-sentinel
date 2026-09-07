@@ -18,7 +18,11 @@ logging.basicConfig(level=logging.INFO)
 app = FastAPI(title="PR Sentinel API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+    "http://localhost:3000",
+    "https://pr-sentinel-three.vercel.app",
+    "https://pr-sentinel.vercel.app",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
