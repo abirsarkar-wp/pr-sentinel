@@ -39,12 +39,15 @@ def embed_documents(texts: list[str]) -> list[list[float]]:
 
 
 def embed_query(text: str) -> list[float]:
-    """Create an embedding for a search query."""
+    """Create an embedding for a search query while respecting free-tier rate limits."""
     result = _client.embed(
         [text],
         model=EMBEDDING_MODEL,
         input_type="query",
         output_dimension=EMBEDDING_DIM,
     )
+
+    # Free Voyage accounts are limited to 3 requests per minute.
+    time.sleep(21)
 
     return result.embeddings[0]
