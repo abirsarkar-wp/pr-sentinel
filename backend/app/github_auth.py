@@ -8,7 +8,14 @@ from app.config import settings
 
 
 def _load_private_key() -> str:
-    key_path = Path(__file__).resolve().parent.parent / settings.GITHUB_PRIVATE_KEY_PATH
+    if settings.GITHUB_PRIVATE_KEY:
+        return settings.GITHUB_PRIVATE_KEY
+
+    key_path = (
+        Path(__file__).resolve().parent.parent
+        / settings.GITHUB_PRIVATE_KEY_PATH
+    )
+
     return key_path.read_text()
 
 

@@ -10,7 +10,8 @@ class Settings(BaseSettings):
     GITHUB_CLIENT_ID: str
     GITHUB_CLIENT_SECRET: str
     GITHUB_WEBHOOK_SECRET: str
-    GITHUB_PRIVATE_KEY_PATH: str
+    GITHUB_PRIVATE_KEY_PATH: str = ""
+    GITHUB_PRIVATE_KEY: str = ""
     GITHUB_TEST_INSTALLATION_ID: str = ""
     GITHUB_EVAL_TOKEN: str = ""
     class Config:
