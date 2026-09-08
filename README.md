@@ -1,6 +1,11 @@
 # PR Sentinel
 
-PR Sentinel is an AI-powered GitHub App that reviews pull requests with repository-aware context. A FastAPI service verifies GitHub webhooks, indexes supported source files into PostgreSQL with pgvector, and uses a Gemini tool-calling agent to return validated findings and post an automated GitHub review. A Next.js dashboard exposes connected repositories, review history, findings, and the agent's recorded turns.
+PR Sentinel automatically reviews GitHub pull requests for bugs, security issues, performance problems, and missing tests. It retrieves relevant repository context, uses a tool-calling Gemini agent to analyze the change, validates structured findings, and posts actionable review comments directly on GitHub.
+
+![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![Next.js 16](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs)
+![Gemini](https://img.shields.io/badge/Gemini-3.5%20Flash--Lite-4285F4?logo=googlegemini&logoColor=white)
+![PostgreSQL + pgvector](https://img.shields.io/badge/PostgreSQL-pgvector-336791?logo=postgresql&logoColor=white)
 
 **Live dashboard:** <https://pr-sentinel-three.vercel.app>  
 **API:** <https://pr-sentinel-production-59e5.up.railway.app>  
@@ -13,6 +18,18 @@ When a developer opens, reopens, or updates a pull request, GitHub delivers a si
 `GitHub PR → signed webhook → FastAPI → indexing / pgvector retrieval → Gemini agent → structured findings → GitHub review`
 
 Subsequent `synchronize` events are also queued for review. The dashboard lets you inspect the result after the background job finishes.
+
+## Try It in 60 Seconds
+
+1. Open the [live dashboard](https://pr-sentinel-three.vercel.app).
+2. Install the GitHub App on a repository connected to the deployed backend.
+3. Open a pull request or push a commit to an existing one.
+4. GitHub sends the webhook and PR Sentinel queues the review automatically.
+5. Refresh the pull request to see the automated review, then inspect its findings and trace in the dashboard.
+
+## Controlled Validation
+
+Project notes record an end-to-end controlled security test: a GitHub PR webhook triggered indexing and review, and PR Sentinel identified an intentionally introduced `eval()` vulnerability as a critical security finding. This demonstrates the integrated review path; it is not a general accuracy benchmark. A committed screenshot or reproducible fixture for that run is not currently available.
 
 ## What It Does
 
@@ -110,7 +127,7 @@ Manual re-ingestion at `POST /repos/{repo_id}/ingest` deletes a repository’s e
 
 PR Sentinel authenticates as a GitHub App. It creates a short-lived RS256 app JWT and exchanges it for an installation access token for cloning and GitHub API requests. The webhook endpoint verifies the raw payload with the configured secret before handling events.
 
-For each eligible PR event, the service fetches the PR and up to 100 changed files. It posts a GitHub review with event `COMMENT`. Eligible findings on lines present in the new-side diff are posted inline. Eligible findings outside that view are appended to the review body. Findings below the `0.5` confidence threshold are withheld from GitHub posting but remain persisted with the review.
+For each eligible PR event, the current implementation retrieves the PR and up to 100 changed files. It posts a GitHub review with event `COMMENT`. Eligible findings on lines present in the new-side diff are posted inline. Eligible findings outside that view are appended to the review body. Findings below the `0.5` confidence threshold are withheld from GitHub posting but remain persisted with the review.
 
 ## Database
 
@@ -140,6 +157,20 @@ The frontend is a Next.js 16 application using React 19 and TypeScript. `NEXT_PU
 
 The frontend consumes `GET /repos`, `GET /repos/{id}/pulls`, `GET /reviews/{id}`, and `GET /reviews/{id}/traces`.
 
+## Technology Stack
+
+| Layer | Technology |
+| --- | --- |
+| Backend | Python 3.12, FastAPI, SQLAlchemy, Alembic |
+| Frontend | Next.js 16, React 19, TypeScript |
+| AI | Google Gemini via `google-genai` |
+| Embeddings | Voyage AI `voyage-code-3` |
+| Database | PostgreSQL |
+| Vector search | pgvector cosine-distance search |
+| GitHub | GitHub App, Webhooks, REST Reviews API |
+| Deployment | Railway backend, Supabase PostgreSQL + pgvector, Vercel frontend |
+| Local database | Docker Compose with `pgvector/pgvector:pg16` |
+
 ## Deployment
 
 The deployed frontend URL is configured in the backend CORS allowlist, and the repository’s Git remote matches the URL above. The backend Docker image uses Python 3.12, installs `git` and `requirements.txt`, applies `alembic upgrade head` at startup, then runs Uvicorn. The stated production topology is Railway for FastAPI, Supabase PostgreSQL with pgvector, Gemini and Voyage API services, and Vercel for Next.js.
@@ -152,7 +183,7 @@ https://pr-sentinel-production-59e5.up.railway.app/webhooks/github
 
 Set Vercel’s `NEXT_PUBLIC_API_URL` to the backend URL. The backend CORS configuration currently includes localhost and the two deployed Vercel origins.
 
-## Local Development
+## Development
 
 ### Prerequisites
 
@@ -282,7 +313,7 @@ curl "http://localhost:8000/repos/<repo-id>/search?q=<url-encoded-query>"
 
 The first call returns `chunks_stored`; the second returns matching file paths, ranges, content, and similarity values. These calls consume Voyage API quota and indexing intentionally throttles free-tier requests.
 
-### 5. Agent and evaluation harness
+### 5. Experimental Evaluation
 
 `backend/eval/run_eval.py` contains an experimental multi-PR evaluator with `full`, `no_retrieval`, and `no_critique` modes. It uses the committed dataset of ten public PR references and writes `backend/EVAL_RESULTS.md` only after a successful run. The evaluator intentionally limits its retrieval corpus to changed files and caps it at 20 chunks because of Voyage free-tier limits.
 
@@ -299,7 +330,7 @@ No completed `EVAL_RESULTS.md` is committed, so this project does **not** claim 
 7. Check the PR for an automated review; high-enough-confidence findings on valid diff lines appear inline.
 8. Open the dashboard to see the repository, review status, findings, token and turn metadata, and trace.
 
-### 7. Controlled security validation
+### 7. Controlled security validation details
 
 Project notes report a controlled test in which the reviewer identified an intentionally introduced `eval()` vulnerability, such as:
 
@@ -393,20 +424,6 @@ pr-sentinel/
 ├── docker-compose.yml
 └── README.md
 ```
-
-## Technology Stack
-
-| Layer | Technology |
-| --- | --- |
-| Backend | Python 3.12, FastAPI, SQLAlchemy, Alembic |
-| Frontend | Next.js 16, React 19, TypeScript |
-| AI | Google Gemini via `google-genai` |
-| Embeddings | Voyage AI `voyage-code-3` |
-| Database | PostgreSQL |
-| Vector search | pgvector cosine-distance search |
-| GitHub | GitHub App, Webhooks, REST Reviews API |
-| Deployment | Railway backend, Supabase PostgreSQL + pgvector, Vercel frontend |
-| Local database | Docker Compose with `pgvector/pgvector:pg16` |
 
 ## Why This Project
 
