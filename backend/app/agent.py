@@ -2,7 +2,7 @@ import json
 import logging
 import time
 
-from anthropic import Anthropic
+from google import genai
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -15,10 +15,10 @@ from app.schemas import FindingsSubmission
 logger = logging.getLogger("pr_sentinel.agent")
 
 
-client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-MODEL = "claude-sonnet-5"
-MAX_GATHER_TURNS = 6
+MODEL = "gemini-3.5-flash-lite"
+MAX_GATHER_TURNS = 4
 
 
 SYSTEM_PROMPT = """You are a senior software engineer performing a pull request code review.
@@ -40,76 +40,91 @@ and a short summary of the PR.
 """
 
 
-READ_FILE_TOOL = {
-    "name": "read_file",
-    "description": (
+def _function_tool(
+    name: str,
+    description: str,
+    parameters: dict,
+) -> dict:
+    return {
+        "type": "function",
+        "name": name,
+        "description": description,
+        "parameters": parameters,
+    }
+
+
+READ_FILE_TOOL = _function_tool(
+    "read_file",
+    (
         "Read the full contents of a file in the repository "
         "at the PR's head commit."
     ),
-    "input_schema": {
+    {
         "type": "object",
         "properties": {
             "file_path": {
                 "type": "string",
                 "description": "Path relative to repo root",
-            }
+            },
         },
         "required": ["file_path"],
     },
-}
+)
 
 
-SEARCH_CODEBASE_TOOL = {
-    "name": "search_codebase",
-    "description": (
+SEARCH_CODEBASE_TOOL = _function_tool(
+    "search_codebase",
+    (
         "Semantic search over the repository's code. "
         "Use natural language or code-like queries."
     ),
-    "input_schema": {
+    {
         "type": "object",
         "properties": {
             "query": {
                 "type": "string",
-            }
+                "description": "Natural language or code-like search query",
+            },
         },
         "required": ["query"],
     },
-}
+)
 
 
-GET_RELATED_TESTS_TOOL = {
-    "name": "get_related_tests",
-    "description": (
+GET_RELATED_TESTS_TOOL = _function_tool(
+    "get_related_tests",
+    (
         "Find test files related to a given source file, "
         "to check test coverage."
     ),
-    "input_schema": {
+    {
         "type": "object",
         "properties": {
             "file_path": {
                 "type": "string",
-            }
+                "description": "Source file path relative to repo root",
+            },
         },
         "required": ["file_path"],
     },
-}
+)
 
 
-SUBMIT_FINDINGS_TOOL = {
-    "name": "submit_findings",
-    "description": (
-        "Submit the final list of code review findings for this PR."
-    ),
-    "input_schema": FindingsSubmission.model_json_schema(),
-}
+SUBMIT_FINDINGS_TOOL = _function_tool(
+    "submit_findings",
+    "Submit the final list of code review findings for this PR.",
+    FindingsSubmission.model_json_schema(),
+)
 
 
 GATHER_TOOLS = [
     READ_FILE_TOOL,
     SEARCH_CODEBASE_TOOL,
     GET_RELATED_TESTS_TOOL,
-    SUBMIT_FINDINGS_TOOL,
 ]
+
+
+SUBMIT_TOOL = [SUBMIT_FINDINGS_TOOL]
 
 
 def build_diff_summary(files: list[dict]) -> str:
@@ -149,7 +164,6 @@ async def execute_tool(
         except Exception as exc:
             return f"Error reading file: {exc}"
 
-        # Prevent one huge file from consuming the whole context.
         return content[:8000]
 
     if tool_name == "search_codebase":
@@ -173,6 +187,110 @@ async def execute_tool(
     return f"Unknown tool: {tool_name}"
 
 
+def _step_for_trace(step) -> dict:
+    try:
+        return step.model_dump(mode="json")
+    except AttributeError:
+        return {
+            "type": getattr(step, "type", None),
+            "name": getattr(step, "name", None),
+            "arguments": getattr(step, "arguments", None),
+            "id": getattr(step, "id", None),
+        }
+
+
+def _add_usage(total_tokens: int, interaction) -> int:
+    usage = getattr(interaction, "usage", None)
+
+    if usage is None:
+        return total_tokens
+
+    return total_tokens + int(
+        getattr(usage, "total_input_tokens", 0)
+        + getattr(usage, "total_output_tokens", 0)
+    )
+
+
+async def _run_gather_turn(
+    interaction,
+    repo: Repo,
+    db: Session,
+    pr_data: dict,
+    traces: list,
+    total_tokens: int,
+    turn: int,
+):
+    function_results = []
+    submitted_input = None
+
+    total_tokens = _add_usage(
+        total_tokens,
+        interaction,
+    )
+
+    traces.append(
+        {
+            "turn": turn,
+            "role": "gather",
+            "content": [
+                _step_for_trace(step)
+                for step in interaction.steps
+            ],
+            "latency_ms": 0,
+        }
+    )
+
+    for step in interaction.steps:
+        if step.type != "function_call":
+            continue
+
+        if step.name == "submit_findings":
+            submitted_input = step.arguments
+
+            function_results.append(
+                {
+                    "type": "function_result",
+                    "name": step.name,
+                    "call_id": step.id,
+                    "result": [
+                        {
+                            "type": "text",
+                            "text": "Draft received.",
+                        }
+                    ],
+                }
+            )
+
+        else:
+            result = await execute_tool(
+                repo,
+                db,
+                pr_data["head_sha"],
+                step.name,
+                step.arguments,
+            )
+
+            function_results.append(
+                {
+                    "type": "function_result",
+                    "name": step.name,
+                    "call_id": step.id,
+                    "result": [
+                        {
+                            "type": "text",
+                            "text": result,
+                        }
+                    ],
+                }
+            )
+
+    return (
+        function_results,
+        submitted_input,
+        total_tokens,
+    )
+
+
 async def run_agent_review(
     db: Session,
     repo: Repo,
@@ -180,7 +298,7 @@ async def run_agent_review(
     files: list[dict],
 ):
     """
-    Run the full plan -> gather -> draft -> critique loop.
+    Run the full Gemini plan -> gather -> draft -> critique loop.
 
     Returns:
         final,
@@ -192,19 +310,13 @@ async def run_agent_review(
 
     diff_summary = build_diff_summary(files)
 
-    messages = [
-        {
-            "role": "user",
-            "content": (
-                "Review this pull request.\n\n"
-                f"Title: {pr_data['title']}\n"
-                f"Description: "
-                f"{pr_data.get('body') or '(none)'}\n\n"
-                "Changed files:\n\n"
-                f"{diff_summary}"
-            ),
-        }
-    ]
+    initial_input = (
+        "Review this pull request.\n\n"
+        f"Title: {pr_data['title']}\n"
+        f"Description: {pr_data.get('body') or '(none)'}\n\n"
+        "Changed files:\n\n"
+        f"{diff_summary}"
+    )
 
     traces = []
     total_tokens = 0
@@ -212,92 +324,37 @@ async def run_agent_review(
     draft: FindingsSubmission | None = None
 
     # Phase A: gather context + produce a draft.
+    interaction = client.interactions.create(
+        model=MODEL,
+        input=initial_input,
+        system_instruction=SYSTEM_PROMPT,
+        tools=GATHER_TOOLS + SUBMIT_TOOL,
+    )
+
     while turn < MAX_GATHER_TURNS:
         turn += 1
+
         start = time.time()
 
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=4096,
-            system=SYSTEM_PROMPT,
-            tools=GATHER_TOOLS,
-            messages=messages,
+        (
+            function_results,
+            submitted_input,
+            total_tokens,
+        ) = await _run_gather_turn(
+            interaction,
+            repo,
+            db,
+            pr_data,
+            traces,
+            total_tokens,
+            turn,
         )
 
         latency_ms = int(
             (time.time() - start) * 1000
         )
 
-        total_tokens += (
-            response.usage.input_tokens
-            + response.usage.output_tokens
-        )
-
-        traces.append(
-            {
-                "turn": turn,
-                "role": "gather",
-                "content": [
-                    block.model_dump(mode="json")
-                    for block in response.content
-                ],
-                "latency_ms": latency_ms,
-            }
-        )
-
-        # Always append Claude's response first.
-        messages.append(
-            {
-                "role": "assistant",
-                "content": response.content,
-            }
-        )
-
-        # Collect every tool call from this Claude response.
-        tool_results = []
-        submitted_input = None
-
-        for block in response.content:
-            if block.type != "tool_use":
-                continue
-
-            if block.name == "submit_findings":
-                submitted_input = block.input
-
-                tool_results.append(
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": "Draft received.",
-                    }
-                )
-
-            else:
-                result = await execute_tool(
-                    repo,
-                    db,
-                    pr_data["head_sha"],
-                    block.name,
-                    block.input,
-                )
-
-                tool_results.append(
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": result,
-                    }
-                )
-
-        # If Claude used tools, the tool_result message MUST
-        # immediately follow the assistant tool_use message.
-        if tool_results:
-            messages.append(
-                {
-                    "role": "user",
-                    "content": tool_results,
-                }
-            )
+        traces[-1]["latency_ms"] = latency_ms
 
         if submitted_input is not None:
             try:
@@ -305,14 +362,25 @@ async def run_agent_review(
                     submitted_input
                 )
 
+                break
+
             except Exception as exc:
-                # We already supplied the required tool_result.
-                # Now a separate user message can explain the
-                # validation problem.
-                messages.append(
+                logger.warning(
+                    "Gemini submit_findings validation failed: %s",
+                    exc,
+                )
+
+                if not function_results:
+                    raise RuntimeError(
+                        f"Draft submission failed validation: {exc}"
+                    ) from exc
+
+                retry_input = list(function_results)
+
+                retry_input.append(
                     {
-                        "role": "user",
-                        "content": (
+                        "type": "text",
+                        "text": (
                             "Your submit_findings call did not match "
                             f"the required schema: {exc}. "
                             "Please fix it and call submit_findings "
@@ -320,23 +388,34 @@ async def run_agent_review(
                         ),
                     }
                 )
+
+                interaction = client.interactions.create(
+                    model=MODEL,
+                    previous_interaction_id=interaction.id,
+                    input=retry_input,
+                    tools=GATHER_TOOLS + SUBMIT_TOOL,
+                )
+
                 continue
 
-            break
-
-        # If Claude returned ordinary text without using a tool,
-        # explicitly ask it to continue with submit_findings.
-        if not tool_results:
-            messages.append(
-                {
-                    "role": "user",
-                    "content": (
-                        "Continue reviewing the PR. Use the available "
-                        "tools when you need more context, and when "
-                        "you are ready, call submit_findings with "
-                        "your complete draft findings."
-                    ),
-                }
+        if function_results:
+            interaction = client.interactions.create(
+                model=MODEL,
+                previous_interaction_id=interaction.id,
+                input=function_results,
+                tools=GATHER_TOOLS + SUBMIT_TOOL,
+            )
+        else:
+            interaction = client.interactions.create(
+                model=MODEL,
+                previous_interaction_id=interaction.id,
+                input=(
+                    "Continue reviewing the PR. Use the available "
+                    "tools when you need more context, and when "
+                    "you are ready, call submit_findings with "
+                    "your complete draft findings."
+                ),
+                tools=GATHER_TOOLS + SUBMIT_TOOL,
             )
 
     if draft is None:
@@ -346,57 +425,63 @@ async def run_agent_review(
         )
 
     # Phase B: self-critique.
-    critique_messages = [
-    {
-        "role": "user",
-        "content": (
-            "Review this pull request again using the draft findings "
-            "below.\n\n"
-            f"PR title: {pr_data['title']}\n\n"
-            "Draft findings:\n"
-            f"{draft.model_dump_json(indent=2)}\n\n"
-            "Now critique the draft findings. Remove anything that is "
-            "a false positive, a duplicate, or too minor to raise in a "
-            "real review. Keep only actionable findings grounded in "
-            "the PR diff. Call submit_findings with the final cleaned-up "
-            "list."
-        ),
-    }
-    ]
+    critique_input = (
+        "Review this pull request again using the draft findings below.\n\n"
+        f"PR title: {pr_data['title']}\n\n"
+        "Draft findings:\n"
+        f"{draft.model_dump_json(indent=2)}\n\n"
+        "Now critique the draft findings. Remove anything that is "
+        "a false positive, a duplicate, or too minor to raise in a "
+        "real review. Keep only actionable findings grounded in "
+        "the PR diff. Call submit_findings with the final cleaned-up "
+        "list."
+    )
 
     start = time.time()
 
-    critique_response = client.messages.create(
-        model=MODEL,
-        max_tokens=4096,
-        system=SYSTEM_PROMPT,
-        tools=[SUBMIT_FINDINGS_TOOL],
-        tool_choice={
-            "type": "tool",
-            "name": "submit_findings",
-        },
-        messages=critique_messages,
-    )
+    critique_response = client.interactions.create(
+    model=MODEL,
+    input=critique_input,
+    system_instruction=SYSTEM_PROMPT,
+    tools=SUBMIT_TOOL,
+    generation_config={
+        "tool_choice": {
+            "allowed_tools": {
+                "mode": "any",
+                "tools": ["submit_findings"],
+            }
+        }
+    },
+)
 
     latency_ms = int(
         (time.time() - start) * 1000
     )
 
-    total_tokens += (
-        critique_response.usage.input_tokens
-        + critique_response.usage.output_tokens
+    total_tokens = _add_usage(
+        total_tokens,
+        critique_response,
     )
 
     turn += 1
 
     final_block = next(
-        block
-        for block in critique_response.content
-        if block.type == "tool_use"
+        (
+            step
+            for step in critique_response.steps
+            if step.type == "function_call"
+            and step.name == "submit_findings"
+        ),
+        None,
     )
 
+    if final_block is None:
+        raise RuntimeError(
+            "Gemini critique did not call submit_findings"
+        )
+
     final = FindingsSubmission.model_validate(
-        final_block.input
+        final_block.arguments
     )
 
     traces.append(
@@ -404,8 +489,8 @@ async def run_agent_review(
             "turn": turn,
             "role": "critique",
             "content": [
-                block.model_dump(mode="json")
-                for block in critique_response.content
+                _step_for_trace(step)
+                for step in critique_response.steps
             ],
             "latency_ms": latency_ms,
         }
